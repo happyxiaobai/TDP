@@ -1,8 +1,7 @@
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.PrintStream;
-import java.util.Scanner;
 import java.util.ArrayList;
+import java.util.Scanner;
 
 public class Instance {
     private int n; // 区域个数
@@ -11,7 +10,7 @@ public class Instance {
 
     public double average1;
     public double average2;
-    public int k;
+    public int k; // 需要分成的大区域个数
     double[][] dist;
 
     public Instance(String filepath) throws FileNotFoundException {
