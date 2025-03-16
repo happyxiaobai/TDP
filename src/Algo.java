@@ -1,28 +1,53 @@
-import jdk.jfr.Threshold;
 import gurobi.*;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.security.Principal;
 import java.util.*;
-
-import java.util.List;
-import java.util.Random;
-
-import java.util.ArrayList;
 
 public class Algo {
     private Instance inst;
     private ArrayList<Area> centers; // 存储所有大区域中心的坐标
     private ArrayList<Integer>[] zones;
     private double r;
+    private int timeLimit = Integer.MAX_VALUE; // 默认无时间限制
 
+    // 设置时间限制
+    public void setTimeLimit(int seconds) {
+        this.timeLimit = seconds;
+    }
 
     public Algo(Instance instance) {
         this.inst = instance;
         this.zones = new ArrayList[inst.k];
         this.r = 0.05;
+    }
+
+    public ArrayList<Integer> getSolutionCenters() throws GRBException, IOException {
+        // 可以创建一个新的方法，类似run但不写入文件
+        // 或者修改run方法，使其返回中心列表
+
+        long startTime = System.currentTimeMillis();
+
+        // 这里是run方法的主要逻辑...
+        // 需要修改以检查是否超时，如果超时则返回当前最好的解
+
+        // 在适当的位置检查时间
+        if (System.currentTimeMillis() - startTime > timeLimit * 1000) {
+            // 如果超时，返回当前找到的最好中心
+            ArrayList<Integer> currentCenters = new ArrayList<>();
+            for (Area center : centers) {
+                currentCenters.add(center.getId());
+            }
+            return currentCenters;
+        }
+
+        // 返回最终的中心列表
+        ArrayList<Integer> finalCenters = new ArrayList<>();
+        for (Area center : centers) {
+            finalCenters.add(center.getId());
+        }
+        return finalCenters;
     }
 
     public void run(String filename) throws GRBException, IOException {

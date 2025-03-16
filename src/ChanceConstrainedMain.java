@@ -7,15 +7,16 @@ public class ChanceConstrainedMain {
         String outputFileName = "2DU100-05-1_cc";
         double gamma = 0.1; // 机会约束风险参数
         int numScenarios = 100; // 场景数量
+        long seed = 12345678; // 添加一个固定种子
 
         // 加载实例
         Instance instance = new Instance(instanceFile);
 
-        // 生成随机场景
+        // 生成随机场景 - 这里已经有固定种子12345
         double[][] scenarios = generateScenarios(instance.getN(), numScenarios);
 
-        // 创建并运行算法
-        ChanceConstrainedAlgo algo = new ChanceConstrainedAlgo(instance, scenarios, gamma);
+        // 创建并运行算法 - 传入固定种子
+        ChanceConstrainedAlgo algo = new ChanceConstrainedAlgo(instance, scenarios, gamma, seed);
         algo.run(outputFileName);
 
         System.out.println("基于机会约束的配送区域划分问题求解完成。");

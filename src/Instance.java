@@ -72,6 +72,127 @@ public class Instance {
         }
     }
 
+    public Instance() {
+
+    }
+
+    /**
+     * 创建当前实例的深度克隆
+     * @return 克隆的实例对象
+     */
+    public Instance clone() {
+        Instance cloned = new Instance();
+        cloned.n = this.n;
+        cloned.k = this.k;
+        cloned.average1 = this.average1;
+        cloned.average2 = this.average2;
+
+        // 复制区域信息
+        cloned.areas = new Area[this.n];
+        for (int i = 0; i < this.n; i++) {
+            cloned.areas[i] = new Area();
+            cloned.areas[i].setId(this.areas[i].getId());
+            cloned.areas[i].setX(this.areas[i].getX());
+            cloned.areas[i].setY(this.areas[i].getY());
+
+            // 复制活跃度指标
+            double[] originalActiveness = this.areas[i].getActiveness();
+            double[] newActiveness = new double[originalActiveness.length];
+            System.arraycopy(originalActiveness, 0, newActiveness, 0, originalActiveness.length);
+            cloned.areas[i].setActiveness(newActiveness);
+
+            // 复制中心标识
+            cloned.areas[i].setCenter(this.areas[i].isCenter());
+
+            // 复制邻居列表
+            ArrayList<Integer> neighbors = new ArrayList<>(this.areas[i].getNeighbors());
+            for (int neighbor : this.areas[i].getNeighbors()) {
+                cloned.areas[i].addNeighbor(neighbor);
+            }
+        }
+
+        // 复制边信息
+        cloned.edges = new int[this.n][this.n];
+        for (int i = 0; i < this.n; i++) {
+            for (int j = 0; j < this.n; j++) {
+                cloned.edges[i][j] = this.edges[i][j];
+            }
+        }
+
+        // 复制距离矩阵
+        cloned.dist = new double[this.n][this.n];
+        for (int i = 0; i < this.n; i++) {
+            for (int j = 0; j < this.n; j++) {
+                cloned.dist[i][j] = this.dist[i][j];
+            }
+        }
+
+        return cloned;
+    }
+
+    /**
+     * 基于原始实例创建新实例，使用特定场景的需求
+     * @param original 原始实例
+     * @param scenarioDemands 场景需求数组
+     */
+    public Instance(Instance original, int[] scenarioDemands) {
+        this.n = original.n;
+        this.k = original.k;
+        this.average1 = original.average1;
+        this.average2 = original.average2;
+
+        // 复制区域信息，但使用新的需求值
+        this.areas = new Area[this.n];
+        double sum1 = 0.0;
+        double sum2 = 0.0;
+
+        for (int i = 0; i < this.n; i++) {
+            this.areas[i] = new Area();
+            this.areas[i].setId(original.areas[i].getId());
+            this.areas[i].setX(original.areas[i].getX());
+            this.areas[i].setY(original.areas[i].getY());
+
+            // 使用场景需求作为第一个活跃度指标
+            double[] originalActiveness = original.areas[i].getActiveness();
+            double[] newActiveness = new double[originalActiveness.length];
+            System.arraycopy(originalActiveness, 0, newActiveness, 0, originalActiveness.length);
+
+            // 更新第一个活跃度指标为场景需求
+            newActiveness[0] = scenarioDemands[i];
+            this.areas[i].setActiveness(newActiveness);
+            sum1 += newActiveness[0];
+            sum2 += newActiveness[1]; // 保留原来的第二个指标
+
+            // 复制中心标识
+            this.areas[i].setCenter(original.areas[i].isCenter());
+
+            // 复制邻居列表
+            for (int neighbor : original.areas[i].getNeighbors()) {
+                this.areas[i].addNeighbor(neighbor);
+            }
+        }
+
+        // 更新平均值
+        this.average1 = sum1 / this.k;
+        this.average2 = sum2 / this.k;
+
+        // 复制边信息
+        this.edges = new int[this.n][this.n];
+        for (int i = 0; i < this.n; i++) {
+            for (int j = 0; j < this.n; j++) {
+                this.edges[i][j] = original.edges[i][j];
+            }
+        }
+
+        // 复制距离矩阵
+        this.dist = new double[this.n][this.n];
+        for (int i = 0; i < this.n; i++) {
+            for (int j = 0; j < this.n; j++) {
+                this.dist[i][j] = original.dist[i][j];
+            }
+        }
+    }
+
     public int getN() {
         return n;
     }

@@ -14,11 +14,15 @@ public class ChanceConstrainedAlgo {
     private int[][] scenarioDemands; // 存储所有场景下的需求
     private int numScenarios; // 场景数量
 
-    public ChanceConstrainedAlgo(Instance instance, double[][] scenarios, double gamma) {
+    private Random rand; // 添加全局Random对象
+
+    // 修改构造函数，接收一个种子参数
+    public ChanceConstrainedAlgo(Instance instance, double[][] scenarios, double gamma, long seed) {
         this.inst = instance;
         this.zones = new ArrayList[inst.k];
         this.r = 0.05;
         this.gamma = gamma;
+        this.rand = new Random(seed); // 使用固定种子初始化随机数生成器
 
         // 初始化场景需求
         this.numScenarios = scenarios.length;
@@ -125,12 +129,11 @@ public class ChanceConstrainedAlgo {
         ArrayList<Integer> candidateCenters = new ArrayList<>();
         HashMap<Integer, Integer> centerFrequency = new HashMap<>();
 
-        // 从场景中随机抽取并求解确定性模型
-        Random rand = new Random();
+        // 这里不再创建新的Random对象，而是使用类的全局rand
         int scenariosProcessed = 0;
 
         while (scenariosProcessed < InitialNum) {
-            int scenarioIndex = rand.nextInt(numScenarios);
+            int scenarioIndex = rand.nextInt(numScenarios); // 使用类的全局rand
 
             // 使用该场景的需求求解确定性模型
             ArrayList<Integer> scenarioCenters = solveForScenario(scenarioIndex);
@@ -155,7 +158,7 @@ public class ChanceConstrainedAlgo {
 
         // 如果中心数量不足，随机补充
         while (candidateCenters.size() < inst.k) {
-            int randomCenter = rand.nextInt(inst.getN());
+            int randomCenter = rand.nextInt(inst.getN()); // 使用类的全局rand
             if (!candidateCenters.contains(randomCenter)) {
                 candidateCenters.add(randomCenter);
             }
@@ -167,8 +170,6 @@ public class ChanceConstrainedAlgo {
     // 求解单一场景的确定性模型
     private ArrayList<Integer> solveForScenario(int scenarioIndex) throws GRBException {
         ArrayList<Integer> scenarioCenters = new ArrayList<>();
-        // 根据TDP中的确定性算法来求解
-
         // 设置求解时间限制
         int localTimeLimit = 60; // 秒
 
@@ -176,14 +177,15 @@ public class ChanceConstrainedAlgo {
         GRBEnv env = new GRBEnv();
         env.set(GRB.IntParam.LogToConsole, 0);
         env.set(GRB.DoubleParam.TimeLimit, localTimeLimit);
+        // 设置Gurobi的随机种子参数，确保求解过程确定性
+        env.set(GRB.IntParam.Seed, 42); // 固定种子
 
-        // 贪心随机选择中心，与TDP中的方法类似
-        // 这里简化处理，假设已经选择了恰当的中心
-        Random rand = new Random();
+        // 以下是原有的贪心随机选择中心的代码
+        // 不再创建新的Random对象，而是使用类的全局rand
         Set<Integer> centerSet = new HashSet<>();
 
         while (centerSet.size() < inst.k) {
-            int candidate = rand.nextInt(inst.getN());
+            int candidate = rand.nextInt(inst.getN()); // 使用类的全局rand
             if (!centerSet.contains(candidate)) {
                 centerSet.add(candidate);
                 scenarioCenters.add(candidate);
@@ -203,7 +205,9 @@ public class ChanceConstrainedAlgo {
     // 使用精确方法生成初始可行解
     private boolean generateInitialSolutionWithExactMethod() throws GRBException {
         GRBEnv env = new GRBEnv();
+
         env.set(GRB.IntParam.LogToConsole, 0);
+        env.set(GRB.IntParam.Seed, 42);
 
         GRBModel model = new GRBModel(env);
 
@@ -296,12 +300,15 @@ public class ChanceConstrainedAlgo {
     // 使用场景生成方法生成初始可行解
     private boolean generateInitialSolutionWithScenarioGeneration() throws GRBException {
         // 创建初始场景子集
-        Random rand = new Random();
+        // 不再创建新的Random对象，使用类的全局rand
         HashSet<Integer> selectedScenarios = new HashSet<>();
         selectedScenarios.add(rand.nextInt(numScenarios)); // 开始时选择一个随机场景
 
         GRBEnv env = new GRBEnv();
+
         env.set(GRB.IntParam.LogToConsole, 0);
+        // 设置Gurobi的随机种子参数，确保求解过程确定性
+        env.set(GRB.IntParam.Seed, 42); // 固定种子
 
         boolean feasible = false;
         int iterationLimit = 100; // 最大迭代次数
@@ -339,7 +346,7 @@ public class ChanceConstrainedAlgo {
                     // 随机选择一些不可行场景加入
                     int numToAdd = Math.min(2, infeasibleScenarios.size()); // 每次添加2个或更少
                     for (int i = 0; i < numToAdd && !infeasibleScenarios.isEmpty(); i++) {
-                        int idx = rand.nextInt(infeasibleScenarios.size());
+                        int idx = rand.nextInt(infeasibleScenarios.size()); // 使用类的全局rand
                         selectedScenarios.add(infeasibleScenarios.get(idx));
                         infeasibleScenarios.remove(idx);
                     }
@@ -347,7 +354,7 @@ public class ChanceConstrainedAlgo {
             } else {
                 // 子模型不可行，尝试不同的场景组合
                 selectedScenarios.clear();
-                selectedScenarios.add(rand.nextInt(numScenarios));
+                selectedScenarios.add(rand.nextInt(numScenarios)); // 使用类的全局rand
             }
 
             subModel.dispose();
@@ -510,7 +517,9 @@ public class ChanceConstrainedAlgo {
 
                     // 添加连通性约束并重新求解
                     GRBEnv env = new GRBEnv();
+
                     env.set(GRB.IntParam.LogToConsole, 0);
+                    env.set(GRB.IntParam.Seed, 42);
 
                     GRBModel model = createSubModelWithConnectivity(env, j, components);
                     model.optimize();
