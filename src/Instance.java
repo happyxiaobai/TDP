@@ -13,6 +13,8 @@ public class Instance {
     public int k; // 需要分成的大区域个数
     double[][] dist;
 
+
+
     public Instance(String filepath) throws FileNotFoundException {
         File file = new File(filepath);
         Scanner sc = new Scanner(file);
@@ -147,26 +149,27 @@ public class Instance {
         double sum2 = 0.0;
 
         for (int i = 0; i < this.n; i++) {
-            this.areas[i] = new Area();
-            this.areas[i].setId(original.areas[i].getId());
-            this.areas[i].setX(original.areas[i].getX());
-            this.areas[i].setY(original.areas[i].getY());
-
-            // 使用场景需求作为第一个活跃度指标
+            // 使用带参数的构造函数，确保neighbors被初始化
             double[] originalActiveness = original.areas[i].getActiveness();
             double[] newActiveness = new double[originalActiveness.length];
             System.arraycopy(originalActiveness, 0, newActiveness, 0, originalActiveness.length);
 
             // 更新第一个活跃度指标为场景需求
             newActiveness[0] = scenarioDemands[i];
-            this.areas[i].setActiveness(newActiveness);
+
+            // 使用带参数的构造函数，而不是无参构造函数
+            this.areas[i] = new Area(original.areas[i].getId(),
+                    original.areas[i].getX(),
+                    original.areas[i].getY(),
+                    newActiveness);
+
             sum1 += newActiveness[0];
-            sum2 += newActiveness[1]; // 保留原来的第二个指标
+            sum2 += newActiveness[1];
 
             // 复制中心标识
             this.areas[i].setCenter(original.areas[i].isCenter());
 
-            // 复制邻居列表
+            // 复制邻居列表 - neighbors现在已经初始化了
             for (int neighbor : original.areas[i].getNeighbors()) {
                 this.areas[i].addNeighbor(neighbor);
             }
@@ -245,6 +248,7 @@ class Area {
     private ArrayList<Integer> neighbors; // 存储所有相邻区域的编号
 
     public Area() {
+        this.neighbors = new ArrayList<>();
     }
 
     public Area(int id, double x, double y, double[] activeness) {

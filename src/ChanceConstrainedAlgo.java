@@ -140,6 +140,7 @@ public class ChanceConstrainedAlgo {
 
             if (scenarioCenters.size() == inst.k) {
                 scenariosProcessed++;
+                System.out.println("处理场景 " + scenariosProcessed + "/" + InitialNum + "，场景索引: " + scenarioIndex);
 
                 // 更新中心频率
                 for (int center : scenarioCenters) {
@@ -167,33 +168,60 @@ public class ChanceConstrainedAlgo {
         return candidateCenters;
     }
 
-    // 求解单一场景的确定性模型
+    // 求解单一场景的确定性模型 - 修改后的方法
     private ArrayList<Integer> solveForScenario(int scenarioIndex) throws GRBException {
-        ArrayList<Integer> scenarioCenters = new ArrayList<>();
         // 设置求解时间限制
         int localTimeLimit = 60; // 秒
 
-        // 创建Gurobi环境
-        GRBEnv env = new GRBEnv();
-        env.set(GRB.IntParam.LogToConsole, 0);
-        env.set(GRB.DoubleParam.TimeLimit, localTimeLimit);
-        // 设置Gurobi的随机种子参数，确保求解过程确定性
-        env.set(GRB.IntParam.Seed, 42); // 固定种子
+        try {
+            // 创建基于特定场景需求的实例
+            Instance scenarioInstance = createScenarioInstance(scenarioIndex);
 
-        // 以下是原有的贪心随机选择中心的代码
-        // 不再创建新的Random对象，而是使用类的全局rand
-        Set<Integer> centerSet = new HashSet<>();
+            // 创建Algo对象并设置时间限制
+            Algo algo = new Algo(scenarioInstance);
+            algo.setTimeLimit(localTimeLimit);
 
-        while (centerSet.size() < inst.k) {
-            int candidate = rand.nextInt(inst.getN()); // 使用类的全局rand
-            if (!centerSet.contains(candidate)) {
-                centerSet.add(candidate);
-                scenarioCenters.add(candidate);
+            // 获取该场景下的求解结果中心点
+            ArrayList<Integer> scenarioCenters = algo.getSolutionCenters();
+
+            // 如果算法未能返回足够的中心点，则随机补充
+            if (scenarioCenters.size() < inst.k) {
+                // 随机补充中心点
+                Set<Integer> centerSet = new HashSet<>(scenarioCenters);
+                while (centerSet.size() < inst.k) {
+                    int candidate = rand.nextInt(inst.getN());
+                    if (!centerSet.contains(candidate)) {
+                        centerSet.add(candidate);
+                        scenarioCenters.add(candidate);
+                    }
+                }
+                System.out.println("场景 " + scenarioIndex + " 中心点不足，随机补充至 " + scenarioCenters.size() + " 个");
             }
-        }
 
-        env.dispose();
-        return scenarioCenters;
+            return scenarioCenters;
+        } catch (Exception e) {
+            System.out.println("求解场景 " + scenarioIndex + " 时出错: " + e.getMessage());
+
+            // 出错时使用随机选择作为备选方案
+            ArrayList<Integer> fallbackCenters = new ArrayList<>();
+            Set<Integer> centerSet = new HashSet<>();
+
+            while (centerSet.size() < inst.k) {
+                int candidate = rand.nextInt(inst.getN());
+                if (!centerSet.contains(candidate)) {
+                    centerSet.add(candidate);
+                    fallbackCenters.add(candidate);
+                }
+            }
+
+            System.out.println("场景 " + scenarioIndex + " 求解失败，使用随机选择了 " + fallbackCenters.size() + " 个中心点");
+            return fallbackCenters;
+        }
+    }
+
+    // 创建基于特定场景需求的Instance实例
+    private Instance createScenarioInstance(int scenarioIndex) {
+        return new Instance(inst, scenarioDemands[scenarioIndex]);
     }
 
     // 方法选择标志
