@@ -150,8 +150,8 @@ public class Instance {
 
         for (int i = 0; i < this.n; i++) {
             // 使用带参数的构造函数，确保neighbors被初始化
-            double[] originalActiveness = original.areas[i].getActiveness();
-            double[] newActiveness = new double[originalActiveness.length];
+            double[] originalActiveness = original.areas[i].getActiveness(); //拷贝第i个基本单元的原始活跃度数组
+            double[] newActiveness = new double[originalActiveness.length]; //创建新的活跃度数组
             System.arraycopy(originalActiveness, 0, newActiveness, 0, originalActiveness.length);
 
             // 更新第一个活跃度指标为场景需求
@@ -243,7 +243,7 @@ class Area {
     private int id; // 区域编号
     private double x; // 横坐标
     private double y; // 纵坐标
-    private double[] activeness; // 活跃度指标
+    private double[] activeness; // 活跃度指标，是一个数组，每一个代表不同的活跃度
     private boolean isCenter = false; // 是否是大区域中心
     private ArrayList<Integer> neighbors; // 存储所有相邻区域的编号
 

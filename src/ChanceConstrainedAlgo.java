@@ -7,8 +7,8 @@ import java.util.*;
 
 public class ChanceConstrainedAlgo {
     private Instance inst;
-    private ArrayList<Area> centers; // 存储所有大区域中心的坐标
-    private ArrayList<Integer>[] zones;
+    private ArrayList<Area> centers; // 存储所有区域中心的坐标
+    private ArrayList<Integer>[] zones; //存储每个区域的基本单元编号
     private double r; // 活动指标平衡容差
     private double gamma; // 机会约束风险参数
     private int[][] scenarioDemands; // 存储所有场景下的需求
@@ -24,7 +24,7 @@ public class ChanceConstrainedAlgo {
         this.gamma = gamma;
         this.rand = new Random(seed); // 使用固定种子初始化随机数生成器
 
-        // 初始化场景需求
+        // 初始化场景需求，把传入的需求场景复制到本地
         this.numScenarios = scenarios.length;
         this.scenarioDemands = new int[numScenarios][inst.getN()];
         for (int s = 0; s < numScenarios; s++) {
@@ -37,7 +37,7 @@ public class ChanceConstrainedAlgo {
     public void run(String filename) throws GRBException, IOException {
         long startTime = System.currentTimeMillis();
         double Best = Double.MAX_VALUE;
-        ArrayList<Integer>[] BestZones = new ArrayList[inst.k];
+        ArrayList<Integer>[] BestZones = new ArrayList[inst.k]; //用来存储每个区域的基本单元编号
 
         // Step 1: 构造初始区域中心集合
         ArrayList<Integer> initialCenters = selectInitialCenters();
@@ -132,8 +132,9 @@ public class ChanceConstrainedAlgo {
         // 这里不再创建新的Random对象，而是使用类的全局rand
         int scenariosProcessed = 0;
 
+
         while (scenariosProcessed < InitialNum) {
-            int scenarioIndex = rand.nextInt(numScenarios); // 使用类的全局rand
+            int scenarioIndex = rand.nextInt(numScenarios); // 选择一个随机场景
 
             // 使用该场景的需求求解确定性模型
             ArrayList<Integer> scenarioCenters = solveForScenario(scenarioIndex);
@@ -170,7 +171,7 @@ public class ChanceConstrainedAlgo {
 
     // 求解单一场景的确定性模型 - 修改后的方法
     private ArrayList<Integer> solveForScenario(int scenarioIndex) throws GRBException {
-        // 设置求解时间限制
+        // 设置确定性场景的求解时间限制
         int localTimeLimit = 60; // 秒
 
         try {
@@ -182,6 +183,7 @@ public class ChanceConstrainedAlgo {
             algo.setTimeLimit(localTimeLimit);
 
             // 获取该场景下的求解结果中心点
+            //TODO 这个函数写错了
             ArrayList<Integer> scenarioCenters = algo.getSolutionCenters();
 
             // 如果算法未能返回足够的中心点，则随机补充

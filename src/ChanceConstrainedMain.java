@@ -15,6 +15,7 @@ public class ChanceConstrainedMain {
         // 生成随机场景 - 这里已经有固定种子12345
         double[][] scenarios = generateScenarios(instance.getN(), numScenarios);
 
+
         // 创建并运行算法 - 传入固定种子
         ChanceConstrainedAlgo algo = new ChanceConstrainedAlgo(instance, scenarios, gamma, seed);
         algo.run(outputFileName);
@@ -28,10 +29,12 @@ public class ChanceConstrainedMain {
     }
 
     // 生成随机场景
+    //第一个参数是基本单元个数，第二个参数是场景数量
     private static double[][] generateScenarios(int n, int numScenarios) {
-        double[][] scenarios = new double[numScenarios][n];
+        double[][] scenarios = new double[numScenarios][n];//每一行是一个场景
         Random rand = new Random(12345); // 固定种子以保证可重复性
 
+        //这里的代码控制着随机生成需求场景
         for (int s = 0; s < numScenarios; s++) {
             for (int i = 0; i < n; i++) {
                 // 假设需求遵循均值为100，方差为25的正态分布

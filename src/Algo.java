@@ -419,10 +419,10 @@ public class Algo {
      */
     public ArrayList<Integer> getSolutionCenters() throws GRBException, IOException {
         long startTime = System.currentTimeMillis();
-        double beta = 0.4;
+        double beta = 0.4; // 这个是候选中心的选择阈值
         double Best = Double.MAX_VALUE;
         int iter = 0;
-        int MaxIter = 1; // 限制迭代次数以满足时间要求
+        int MaxIter = 100; // 限制迭代次数以满足时间要求
         double alpha = 0;
         double delta = 0.01;
         ArrayList<Integer> bestCenters = new ArrayList<>();
@@ -491,7 +491,7 @@ public class Algo {
                 try {
                     GRBEnv env = new GRBEnv();
                     env.set(GRB.IntParam.LogToConsole, 0);
-
+                    env.set(GRB.IntParam.Seed, 42);
                     GRBModel model = new GRBModel(env);
 
                     // 创建变量
@@ -538,7 +538,7 @@ public class Algo {
                     model.setObjective(objExpr, GRB.MINIMIZE);
 
                     // 设置求解时间限制
-                    model.set(GRB.DoubleParam.TimeLimit, timeLimit * 0.5); // 使用一半的时间限制
+                    model.set(GRB.DoubleParam.TimeLimit, timeLimit ); // 使用一半的时间限制
 
                     // 求解
                     model.optimize();
