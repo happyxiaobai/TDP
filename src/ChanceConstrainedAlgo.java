@@ -184,7 +184,7 @@ public class ChanceConstrainedAlgo {
 
             // 获取该场景下的求解结果中心点
             //TODO 这个函数写错了
-            ArrayList<Integer> scenarioCenters = algo.getSolutionCenters();
+            ArrayList<Integer> scenarioCenters = algo.getCorrectSolutionCenters();
 
             // 如果算法未能返回足够的中心点，则随机补充
             if (scenarioCenters.size() < inst.k) {
