@@ -48,6 +48,7 @@ public class ChanceConstrainedAlgo {
         }
 
         // Step 2: 生成初始可行解
+        //固定初始区域中心之后，进行不考虑连通性的指派
         boolean feasible = false;
         if (useScenarioGenerationMethod()) {
             feasible = generateInitialSolutionWithScenarioGeneration();
@@ -121,6 +122,7 @@ public class ChanceConstrainedAlgo {
         buffer.write("程序运行时间为：" + timeSpentInSeconds + "s" + "\n");
         buffer.write("机会约束风险参数：" + gamma + "\n");
         buffer.close();
+        System.out.println("程序运行时间为：" + timeSpentInSeconds + "s" + "\n");
     }
 
     // 选择初始区域中心
@@ -183,7 +185,8 @@ public class ChanceConstrainedAlgo {
             algo.setTimeLimit(localTimeLimit);
 
             // 获取该场景下的求解结果中心点
-            //TODO 这个函数写错了
+            //TODO 函数内部可以修改平衡约束的不等式，当前同时存在大于等于和小于等于
+            //TODO 对于场景无法准确求解的情况，应该随机选择一个新的场景进行尝试，这里需要修改
             ArrayList<Integer> scenarioCenters = algo.getCorrectSolutionCenters();
 
             // 如果算法未能返回足够的中心点，则随机补充
@@ -270,7 +273,7 @@ public class ChanceConstrainedAlgo {
 
         // 约束22: 容量上限约束
         double U = (1 + r) * inst.average1; // 区域最大容量上限
-        double M = 10 * U; // 足够大的数
+        double M = centers.size() * U; // 足够大的数
 
         for (int j = 0; j < centers.size(); j++) {
             for (int s = 0; s < numScenarios; s++) {
@@ -423,6 +426,7 @@ public class ChanceConstrainedAlgo {
         double U = (1 + r) * inst.average1; // 区域最大容量上限
 
         for (int j = 0; j < centers.size(); j++) {
+            //实际上多一个场景就是多一些需求平衡约束，其他约束没什么变化
             for (int s : selectedScenarios) {
                 GRBLinExpr expr = new GRBLinExpr();
                 for (int i = 0; i < inst.getN(); i++) {
