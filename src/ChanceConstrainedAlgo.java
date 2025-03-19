@@ -37,10 +37,10 @@ public class ChanceConstrainedAlgo {
         }
     }
 
-    public void run(String filename) throws GRBException, IOException {
+    public void run(String filename, boolean useScenarioGeneration) throws GRBException, IOException {
         long startTime = System.currentTimeMillis();
         double Best = Double.MAX_VALUE;
-        ArrayList<Integer>[] BestZones = new ArrayList[inst.k]; //用来存储每个区域的基本单元编号
+        ArrayList<Integer>[] BestZones = new ArrayList[inst.k];
 
         // Step 1: 构造初始区域中心集合
         ArrayList<Integer> initialCenters = selectInitialCenters();
@@ -51,12 +51,40 @@ public class ChanceConstrainedAlgo {
         }
 
         // Step 2: 生成初始可行解
-        //固定初始区域中心之后，进行不考虑连通性的指派
         boolean feasible = false;
-        if (useScenarioGenerationMethod()) {
+        if (useScenarioGeneration) {
+            // 使用场景生成法
             feasible = generateInitialSolutionWithScenarioGeneration();
+
+            if (feasible) {
+                // Step 3: 改善初始解 - 场景生成法需要迭代调整中心
+                boolean change = true;
+                double cur_value = evaluateObjective();
+
+                while (change) {
+                    change = false;
+
+                    // 检查每个区域的真正中心
+                    ArrayList<Area> newCenters = findTrueCenters();
+
+                    // 如果区域中心发生变化，更新并重新求解
+                    if (!compareCenters(centers, newCenters)) {
+                        centers = newCenters;
+                        change = true;
+                        feasible = generateInitialSolutionWithScenarioGeneration();
+                        if (feasible) {
+                            cur_value = evaluateObjective();
+                        }
+                    }
+                }
+
+                // 检查并确保连通性
+                ensureConnectivity();
+            }
         } else {
+            // 使用精确方法 - 连通性将在内部处理
             feasible = generateInitialSolutionWithExactMethod();
+            // 精确方法已经在内部处理了连通性和中心调整
         }
 
         if (!feasible) {
@@ -64,38 +92,8 @@ public class ChanceConstrainedAlgo {
             return;
         }
 
-        // Step 3: 改善初始解
-        boolean change = true;
-        double cur_value = evaluateObjective();
-
-        while (change) {
-            change = false;
-
-            // 检查每个区域的真正中心
-            ArrayList<Area> newCenters = findTrueCenters();
-
-            // 如果区域中心发生变化，更新并重新求解
-            if (!compareCenters(centers, newCenters)) {
-                centers = newCenters;
-                change = true;
-
-                if (useScenarioGenerationMethod()) {
-                    feasible = generateInitialSolutionWithScenarioGeneration();
-                } else {
-                    feasible = generateInitialSolutionWithExactMethod();
-                }
-
-                if (feasible) {
-                    cur_value = evaluateObjective();
-                }
-            }
-        }
-
-        // 检查并确保连通性
-        ensureConnectivity();
-
         // 评估最终结果
-        cur_value = evaluateObjective();
+        double cur_value = evaluateObjective();
         if (cur_value < Best) {
             Best = cur_value;
             for (int z = 0; z < inst.k; z++) {
@@ -126,6 +124,12 @@ public class ChanceConstrainedAlgo {
         buffer.write("机会约束风险参数：" + gamma + "\n");
         buffer.close();
         System.out.println("程序运行时间为：" + timeSpentInSeconds + "s" + "\n");
+    }
+
+    // 保持原函数的向后兼容性
+    public void run(String filename) throws GRBException, IOException {
+        // 默认情况下，根据问题规模选择方法
+        run(filename, inst.getN() > 100);
     }
 
     // 选择初始区域中心
@@ -240,97 +244,209 @@ public class ChanceConstrainedAlgo {
 
     // 使用精确方法生成初始可行解
     private boolean generateInitialSolutionWithExactMethod() throws GRBException {
-        GRBEnv env = new GRBEnv();
+        boolean feasible = false;
+        boolean centersChanged = true;
 
-        env.set(GRB.IntParam.LogToConsole, 0);
-        env.set(GRB.IntParam.Seed, 42);
+        while (centersChanged) {
+            centersChanged = false;
 
-        GRBModel model = new GRBModel(env);
+            // 创建环境和模型
+            GRBEnv env = new GRBEnv();
+            env.set(GRB.IntParam.LogToConsole, 0);
+            env.set(GRB.IntParam.Seed, 42);
+            GRBModel model = new GRBModel(env);
 
-        // 决策变量 x_ij
-        GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
-        for (int i = 0; i < inst.getN(); i++) {
-            for (int j = 0; j < centers.size(); j++) {
-                x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + centers.get(j).getId());
-                if (i == centers.get(j).getId()) {
-                    x[i][j].set(GRB.DoubleAttr.LB, 1);
-                    x[i][j].set(GRB.DoubleAttr.UB, 1);
+            // 决策变量 x_ij
+            GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
+            for (int i = 0; i < inst.getN(); i++) {
+                for (int j = 0; j < centers.size(); j++) {
+                    x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + centers.get(j).getId());
+                    if (i == centers.get(j).getId()) {
+                        x[i][j].set(GRB.DoubleAttr.LB, 1);
+                        x[i][j].set(GRB.DoubleAttr.UB, 1);
+                    }
                 }
             }
-        }
 
-        // 场景违反标志 z_omega
-        GRBVar[] z = new GRBVar[numScenarios];
-        for (int s = 0; s < numScenarios; s++) {
-            z[s] = model.addVar(0, 1, 0, GRB.BINARY, "z_" + s);
-        }
-
-        // 约束2: 每个基本单元必须且只能属于一个区域
-        for (int i = 0; i < inst.getN(); i++) {
-            GRBLinExpr expr = new GRBLinExpr();
-            for (int j = 0; j < centers.size(); j++) {
-                expr.addTerm(1.0, x[i][j]);
-            }
-            model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
-        }
-
-        // 约束22: 容量上限约束
-        double U = (1 + r) * inst.average1; // 区域最大容量上限
-        double M = centers.size() * U; // 足够大的数
-
-        for (int j = 0; j < centers.size(); j++) {
+            // 场景违反标志 z_omega
+            GRBVar[] z = new GRBVar[numScenarios];
             for (int s = 0; s < numScenarios; s++) {
+                z[s] = model.addVar(0, 1, 0, GRB.BINARY, "z_" + s);
+            }
+
+            // 约束: 每个基本单元必须且只能属于一个区域
+            for (int i = 0; i < inst.getN(); i++) {
                 GRBLinExpr expr = new GRBLinExpr();
-                for (int i = 0; i < inst.getN(); i++) {
-                    expr.addTerm(scenarioDemands[s][i], x[i][j]);
+                for (int j = 0; j < centers.size(); j++) {
+                    expr.addTerm(1.0, x[i][j]);
                 }
-                expr.addTerm(M, z[s]);
-                model.addConstr(expr, GRB.LESS_EQUAL, U + M, "capacity_" + j + "_" + s);
+                model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
             }
-        }
 
-        // 约束27: 场景违反限制
-        GRBLinExpr violationExpr = new GRBLinExpr();
-        for (int s = 0; s < numScenarios; s++) {
-            violationExpr.addTerm(1.0, z[s]);
-        }
-        int maxViolations = (int) Math.floor(gamma * numScenarios);
-        model.addConstr(violationExpr, GRB.LESS_EQUAL, maxViolations, "violations");
+            // 容量上限约束 - 对所有场景
+            double U = (1 + r) * inst.average1; // 区域最大容量上限
+            double M = centers.size() * U; // 足够大的数
 
-        // 目标函数: 最小化总距离
-        GRBLinExpr objExpr = new GRBLinExpr();
-        for (int i = 0; i < inst.getN(); i++) {
             for (int j = 0; j < centers.size(); j++) {
-                objExpr.addTerm(inst.dist[i][centers.get(j).getId()], x[i][j]);
+                for (int s = 0; s < numScenarios; s++) {
+                    GRBLinExpr expr = new GRBLinExpr();
+                    for (int i = 0; i < inst.getN(); i++) {
+                        expr.addTerm(scenarioDemands[s][i], x[i][j]);
+                    }
+                    expr.addTerm(M, z[s]);
+                    model.addConstr(expr, GRB.LESS_EQUAL, U + M, "capacity_" + j + "_" + s);
+                }
             }
-        }
-        model.setObjective(objExpr, GRB.MINIMIZE);
 
-        // 求解模型
-        model.optimize();
+            // 场景违反限制
+            GRBLinExpr violationExpr = new GRBLinExpr();
+            for (int s = 0; s < numScenarios; s++) {
+                violationExpr.addTerm(1.0, z[s]);
+            }
+            int maxViolations = (int) Math.floor(gamma * numScenarios);
+            model.addConstr(violationExpr, GRB.LESS_EQUAL, maxViolations, "violations");
 
-        // 检查是否找到可行解
-        if (model.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
-                model.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
+            // 设置目标函数: 最小化总距离
+            GRBLinExpr objExpr = new GRBLinExpr();
+            for (int i = 0; i < inst.getN(); i++) {
+                for (int j = 0; j < centers.size(); j++) {
+                    objExpr.addTerm(inst.dist[i][centers.get(j).getId()], x[i][j]);
+                }
+            }
+            model.setObjective(objExpr, GRB.MINIMIZE);
 
-            // 提取解决方案
-            for (int j = 0; j < centers.size(); j++) {
-                zones[j] = new ArrayList<>();
-                for (int i = 0; i < inst.getN(); i++) {
-                    if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
-                        zones[j].add(i);
+            // 添加连通性约束的迭代过程
+            boolean connectivityViolation = true;
+            int connectivityIterations = 0;
+            int maxConnectivityIterations = 1000;
+            int totalConstraints = 0;
+
+            while (connectivityViolation && connectivityIterations < maxConnectivityIterations) {
+                connectivityIterations++;
+
+                // 求解当前模型
+                model.optimize();
+
+                // 检查模型状态
+                if (model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL &&
+                        model.get(GRB.IntAttr.Status) != GRB.Status.SUBOPTIMAL) {
+                    // 模型不可行
+                    model.dispose();
+                    env.dispose();
+                    return false;
+                }
+
+                // 提取当前解
+                for (int j = 0; j < centers.size(); j++) {
+                    zones[j] = new ArrayList<>();
+                    for (int i = 0; i < inst.getN(); i++) {
+                        if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
+                            zones[j].add(i);
+                        }
+                    }
+                }
+
+                // 检查连通性
+                connectivityViolation = false;
+                int constraintCounter = 0;
+
+                for (int j = 0; j < centers.size(); j++) {
+                    ArrayList<ArrayList<Integer>> components = findConnectedComponents(zones[j]);
+
+                    if (components.size() > 1) {
+                        connectivityViolation = true;
+
+                        // 找出中心所在的连通组件
+                        int centerComponentIndex = -1;
+                        for (int c = 0; c < components.size(); c++) {
+                            if (components.get(c).contains(centers.get(j).getId())) {
+                                centerComponentIndex = c;
+                                break;
+                            }
+                        }
+
+                        // 为每个不包含中心的连通组件添加连通性约束
+                        for (int c = 0; c < components.size(); c++) {
+                            if (c != centerComponentIndex) {
+                                ArrayList<Integer> component = components.get(c);
+
+                                // 找出该组件的邻居
+                                HashSet<Integer> neighbors = new HashSet<>();
+                                for (int node : component) {
+                                    for (int neighbor : inst.getAreas()[node].getNeighbors()) {
+                                        if (!component.contains(neighbor)) {
+                                            neighbors.add(neighbor);
+                                        }
+                                    }
+                                }
+
+                                // 添加连通性约束
+                                GRBLinExpr expr = new GRBLinExpr();
+
+                                // 对所有的邻居节点
+                                for (int neighbor : neighbors) {
+                                    expr.addTerm(1.0, x[neighbor][j]);
+                                }
+
+                                // 对当前组件中的所有节点
+                                for (int node : component) {
+                                    expr.addTerm(-1.0, x[node][j]);
+                                }
+
+                                model.addConstr(expr, GRB.GREATER_EQUAL, 1 - component.size(), "connectivity_" + totalConstraints);
+                                constraintCounter++;
+                                totalConstraints++;
+                            }
+                        }
+                    }
+                }
+
+                // 如果没有连通性违反，退出循环
+                if (!connectivityViolation) {
+                    break;
+                }
+
+                System.out.println("添加了 " + constraintCounter + " 个连通性约束，继续迭代...");
+            }
+
+            if (connectivityViolation) {
+                System.out.println("警告：在最大迭代次数内未能保证所有区域的连通性");
+                model.dispose();
+                env.dispose();
+                return false;
+            }
+
+            // 连通性约束满足，结果有效
+            feasible = true;
+
+            // 更新区域中心
+            ArrayList<Area> newCenters = findTrueCenters();
+
+            // 如果中心发生变化，需要重新求解
+            if (!compareCenters(centers, newCenters)) {
+                centers = newCenters;
+                centersChanged = true;
+                System.out.println("区域中心发生变化，重新求解...");
+            }
+
+            // 只有当中心不再变化时才保留最终解
+            if (!centersChanged) {
+                // 确保zones中包含最终解
+                for (int j = 0; j < centers.size(); j++) {
+                    zones[j] = new ArrayList<>();
+                    for (int i = 0; i < inst.getN(); i++) {
+                        if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
+                            zones[j].add(i);
+                        }
                     }
                 }
             }
 
             model.dispose();
             env.dispose();
-            return true;
         }
 
-        model.dispose();
-        env.dispose();
-        return false;
+        return feasible;
     }
 
     // 使用场景生成方法生成初始可行解
@@ -546,7 +662,60 @@ public class ChanceConstrainedAlgo {
     private void ensureConnectivity() throws GRBException {
         boolean allConnected = false;
         int iteration = 0;
-        int maxIterations = 10; // 限制迭代次数
+        int maxIterations = 1000; // 限制迭代次数
+
+        // 创建一个模型，并在整个过程中保持它不被销毁
+        GRBEnv env = new GRBEnv();
+        env.set(GRB.IntParam.LogToConsole, 0);
+        env.set(GRB.IntParam.Seed, 42);
+
+        GRBModel model = new GRBModel(env);
+
+        // 决策变量 x_ij
+        GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
+        for (int i = 0; i < inst.getN(); i++) {
+            for (int j = 0; j < centers.size(); j++) {
+                x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + centers.get(j).getId());
+                if (i == centers.get(j).getId()) {
+                    x[i][j].set(GRB.DoubleAttr.LB, 1);
+                    x[i][j].set(GRB.DoubleAttr.UB, 1);
+                }
+            }
+        }
+
+        // 约束2: 每个基本单元必须且只能属于一个区域
+        for (int i = 0; i < inst.getN(); i++) {
+            GRBLinExpr expr = new GRBLinExpr();
+            for (int j = 0; j < centers.size(); j++) {
+                expr.addTerm(1.0, x[i][j]);
+            }
+            model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
+        }
+
+        // 添加需求约束: 使用之前选定的场景
+        double U = (1 + r) * inst.average1; // 区域最大容量上限
+
+        for (int j = 0; j < centers.size(); j++) {
+            for (int s : selectedScenarios) {
+                GRBLinExpr expr = new GRBLinExpr();
+                for (int i = 0; i < inst.getN(); i++) {
+                    expr.addTerm(scenarioDemands[s][i], x[i][j]);
+                }
+                model.addConstr(expr, GRB.LESS_EQUAL, U, "capacity_" + j + "_" + s);
+            }
+        }
+
+        // 目标函数: 最小化总距离
+        GRBLinExpr objExpr = new GRBLinExpr();
+        for (int i = 0; i < inst.getN(); i++) {
+            for (int j = 0; j < centers.size(); j++) {
+                objExpr.addTerm(inst.dist[i][centers.get(j).getId()], x[i][j]);
+            }
+        }
+        model.setObjective(objExpr, GRB.MINIMIZE);
+
+        // 记录已添加的约束总数
+        int totalConstraints = 0;
 
         while (!allConnected && iteration < maxIterations) {
             iteration++;
@@ -555,6 +724,20 @@ public class ChanceConstrainedAlgo {
             boolean hasDisconnection = false;
             Map<Integer, List<ArrayList<Integer>>> allDisconnectedComponents = new HashMap<>();
 
+            // 先获取当前解
+            if (iteration > 1) {
+                // 提取解决方案
+                for (int j = 0; j < centers.size(); j++) {
+                    zones[j] = new ArrayList<>();
+                    for (int i = 0; i < inst.getN(); i++) {
+                        if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
+                            zones[j].add(i);
+                        }
+                    }
+                }
+            }
+
+            // 对每个区域检查连通性
             for (int j = 0; j < centers.size(); j++) {
                 ArrayList<ArrayList<Integer>> components = findConnectedComponents(zones[j]);
 
@@ -589,47 +772,6 @@ public class ChanceConstrainedAlgo {
                 continue;
             }
 
-            // 创建一个新的模型，加入所有连通性约束
-            GRBEnv env = new GRBEnv();
-            env.set(GRB.IntParam.LogToConsole, 0);
-            env.set(GRB.IntParam.Seed, 42);
-
-            GRBModel model = new GRBModel(env);
-
-            // 决策变量 x_ij
-            GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
-            for (int i = 0; i < inst.getN(); i++) {
-                for (int j = 0; j < centers.size(); j++) {
-                    x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + centers.get(j).getId());
-                    if (i == centers.get(j).getId()) {
-                        x[i][j].set(GRB.DoubleAttr.LB, 1);
-                        x[i][j].set(GRB.DoubleAttr.UB, 1);
-                    }
-                }
-            }
-
-            // 约束2: 每个基本单元必须且只能属于一个区域
-            for (int i = 0; i < inst.getN(); i++) {
-                GRBLinExpr expr = new GRBLinExpr();
-                for (int j = 0; j < centers.size(); j++) {
-                    expr.addTerm(1.0, x[i][j]);
-                }
-                model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
-            }
-
-            // 添加需求约束: 使用之前选定的场景
-            double U = (1 + r) * inst.average1; // 区域最大容量上限
-
-            for (int j = 0; j < centers.size(); j++) {
-                for (int s : selectedScenarios) {
-                    GRBLinExpr expr = new GRBLinExpr();
-                    for (int i = 0; i < inst.getN(); i++) {
-                        expr.addTerm(scenarioDemands[s][i], x[i][j]);
-                    }
-                    model.addConstr(expr, GRB.LESS_EQUAL, U, "capacity_" + j + "_" + s);
-                }
-            }
-
             // 添加连通性约束
             int constraintCounter = 0;
             for (Map.Entry<Integer, List<ArrayList<Integer>>> entry : allDisconnectedComponents.entrySet()) {
@@ -660,49 +802,42 @@ public class ChanceConstrainedAlgo {
                         expr.addTerm(-1.0, x[node][districtIndex]);
                     }
 
-                    model.addConstr(expr, GRB.GREATER_EQUAL, 1 - component.size(), "connectivity_" + constraintCounter++);
+                    model.addConstr(expr, GRB.GREATER_EQUAL, 1 - component.size(), "connectivity_" + totalConstraints);
+                    constraintCounter++;
+                    totalConstraints++;
                 }
             }
-
-            // 目标函数: 最小化总距离
-            GRBLinExpr objExpr = new GRBLinExpr();
-            for (int i = 0; i < inst.getN(); i++) {
-                for (int j = 0; j < centers.size(); j++) {
-                    objExpr.addTerm(inst.dist[i][centers.get(j).getId()], x[i][j]);
-                }
-            }
-            model.setObjective(objExpr, GRB.MINIMIZE);
 
             // 求解模型
             model.optimize();
 
-            // 如果找到可行解，更新区域分配
-            if (model.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
-                    model.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
-
-                // 提取解决方案
-                for (int j = 0; j < centers.size(); j++) {
-                    zones[j] = new ArrayList<>();
-                    for (int i = 0; i < inst.getN(); i++) {
-                        if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
-                            zones[j].add(i);
-                        }
-                    }
-                }
-
-                System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
-            } else {
+            // 如果找不到可行解，退出
+            if (model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL &&
+                    model.get(GRB.IntAttr.Status) != GRB.Status.SUBOPTIMAL) {
                 System.out.println("连通性处理迭代 " + iteration + " 失败，模型无解");
                 break;
             }
 
-            model.dispose();
-            env.dispose();
+            System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
+        }
+
+        // 最后一次提取解决方案
+        for (int j = 0; j < centers.size(); j++) {
+            zones[j] = new ArrayList<>();
+            for (int i = 0; i < inst.getN(); i++) {
+                if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
+                    zones[j].add(i);
+                }
+            }
         }
 
         if (!allConnected) {
             System.out.println("警告：在最大迭代次数内未能保证所有区域的连通性");
         }
+
+        // 最后才销毁模型和环境
+        model.dispose();
+        env.dispose();
     }
 
     // 找出一个区域内的所有连通组件

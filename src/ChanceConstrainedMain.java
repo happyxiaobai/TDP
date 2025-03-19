@@ -3,10 +3,10 @@ import java.util.Random;
 public class ChanceConstrainedMain {
     public static void main(String[] args) throws Exception {
         // 指定输入文件
-        String instanceFile = "./Instances/2DU100-05-1.dat";
-        String outputFileName = "2DU100-05-1_cc";
-        double gamma = 0.1; // 机会约束风险参数
-        int numScenarios = 100; // 场景数量
+        String instanceFile = "./Instances/DU200-05-10.dat";
+        String outputFileName = "DU200-05-10_cc";
+        double gamma = 0.05; // 机会约束风险参数
+        int numScenarios = 10000; // 场景数量
         long seed = 12345678; // 添加一个固定种子
 
         // 加载实例
@@ -18,8 +18,8 @@ public class ChanceConstrainedMain {
 
         // 创建并运行算法 - 传入固定种子
         ChanceConstrainedAlgo algo = new ChanceConstrainedAlgo(instance, scenarios, gamma, seed);
-        algo.run(outputFileName);
-
+//        algo.run(outputFileName,false);
+        algo.run(outputFileName,false);
         System.out.println("基于机会约束的配送区域划分问题求解完成。");
         String outputImagePath = "./output/" + outputFileName + "_visualization.png";
         DistrictVisualizer visualizer = new DistrictVisualizer(instance, algo.getZones(), algo.getCenters());
