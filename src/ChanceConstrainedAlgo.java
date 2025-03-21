@@ -18,11 +18,14 @@ public class ChanceConstrainedAlgo {
 
     private HashSet<Integer> selectedScenarios; // 存储选定的场景集合
 
+    private double baseDemandUpperBound; // 基础上限(基于原始实例)
+    private double[] scenarioDemandUpperBounds; // 每个场景的上限
+
     // 修改构造函数，接收一个种子参数
     public ChanceConstrainedAlgo(Instance instance, double[][] scenarios, double gamma, long seed) {
         this.inst = instance;
         this.zones = new ArrayList[inst.k];
-        this.r = 0.05;
+        this.r = 0.1;
         this.gamma = gamma;
         this.rand = new Random(seed); // 使用固定种子初始化随机数生成器
         this.selectedScenarios = new HashSet<>(); // 初始化选定场景集合
@@ -30,10 +33,22 @@ public class ChanceConstrainedAlgo {
         // 初始化场景需求，把传入的需求场景复制到本地
         this.numScenarios = scenarios.length;
         this.scenarioDemands = new int[numScenarios][inst.getN()];
+        this.scenarioDemandUpperBounds = new double[numScenarios];
+
+        // 计算基础需求上限
+        double totalDemand = 0;
+        for (int i = 0; i < inst.getN(); i++) {
+            totalDemand += inst.getAreas()[i].getActiveness()[0];
+        }
+        this.baseDemandUpperBound = (1 + r) * (totalDemand / inst.k);
+
         for (int s = 0; s < numScenarios; s++) {
+            double scenarioTotalDemand = 0;
             for (int i = 0; i < inst.getN(); i++) {
                 this.scenarioDemands[s][i] = (int) scenarios[s][i];
+                scenarioTotalDemand += scenarios[s][i];
             }
+            this.scenarioDemandUpperBounds[s] = (1 + r) * (scenarioTotalDemand / inst.k);
         }
     }
 
@@ -284,8 +299,8 @@ public class ChanceConstrainedAlgo {
             }
 
             // 容量上限约束 - 对所有场景
-            double U = (1 + r) * inst.average1; // 区域最大容量上限
-            double M = centers.size() * U; // 足够大的数
+            double U = 0; // 区域最大容量上限
+            double M = 0; // 足够大的数
 
             for (int j = 0; j < centers.size(); j++) {
                 for (int s = 0; s < numScenarios; s++) {
@@ -294,6 +309,8 @@ public class ChanceConstrainedAlgo {
                         expr.addTerm(scenarioDemands[s][i], x[i][j]);
                     }
                     expr.addTerm(M, z[s]);
+                    U = scenarioDemandUpperBounds[s];
+                    M = centers.size() * U;
                     model.addConstr(expr, GRB.LESS_EQUAL, U + M, "capacity_" + j + "_" + s);
                 }
             }
@@ -554,6 +571,7 @@ public class ChanceConstrainedAlgo {
                 for (int i = 0; i < inst.getN(); i++) {
                     expr.addTerm(scenarioDemands[s][i], x[i][j]);
                 }
+                U = scenarioDemandUpperBounds[s];
                 model.addConstr(expr, GRB.LESS_EQUAL, U, "capacity_" + j + "_" + s);
             }
         }
@@ -594,7 +612,9 @@ public class ChanceConstrainedAlgo {
         HashSet<Integer> feasibleScenarios = new HashSet<>();
         double U = (1 + r) * inst.average1; // 区域最大容量上限
 
+
         for (int s = 0; s < numScenarios; s++) {
+            U = scenarioDemandUpperBounds[s];
             boolean scenarioFeasible = true;
 
             for (int j = 0; j < centers.size(); j++) {
@@ -701,6 +721,7 @@ public class ChanceConstrainedAlgo {
                 for (int i = 0; i < inst.getN(); i++) {
                     expr.addTerm(scenarioDemands[s][i], x[i][j]);
                 }
+                U = scenarioDemandUpperBounds[s];
                 model.addConstr(expr, GRB.LESS_EQUAL, U, "capacity_" + j + "_" + s);
             }
         }

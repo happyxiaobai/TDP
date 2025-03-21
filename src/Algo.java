@@ -11,6 +11,7 @@ public class Algo {
     private ArrayList<Integer>[] zones;
     private double r;
     private int timeLimit = Integer.MAX_VALUE; // 默认无时间限制
+    private double demandUpperBound; // 新增变量存储U
 
     // 设置时间限制
     public void setTimeLimit(int seconds) {
@@ -20,7 +21,14 @@ public class Algo {
     public Algo(Instance instance) {
         this.inst = instance;
         this.zones = new ArrayList[inst.k];
-        this.r = 0.05;
+        this.r = 0.1;
+
+        // 计算总需求并设置上限
+        double totalDemand = 0;
+        for (int i = 0; i < inst.getN(); i++) {
+            totalDemand += inst.getAreas()[i].getActiveness()[0];
+        }
+        this.demandUpperBound = (1 + r) * (totalDemand / inst.k);
     }
 
 
@@ -417,184 +425,6 @@ public class Algo {
      * 返回解决方案中的区域中心列表，不写入文件
      * @return 区域中心ID列表
      */
-    public ArrayList<Integer> getSolutionCenters() throws GRBException, IOException {
-        long startTime = System.currentTimeMillis();
-        double beta = 0.4; // 这个是候选中心的选择阈值
-        double Best = Double.MAX_VALUE;
-        int iter = 0;
-        int MaxIter = 100; // 限制迭代次数以满足时间要求
-        double alpha = 0;
-        double delta = 0.01;
-        ArrayList<Integer> bestCenters = new ArrayList<>();
-
-        Random rand = new Random();
-        rand.setSeed(42); // 使用固定种子确保结果可重现
-
-        while (iter < MaxIter && (System.currentTimeMillis() - startTime) < timeLimit * 1000) {
-            centers = new ArrayList<>();
-            int startId = rand.nextInt(inst.getN()); // 随机选择一个起始点
-            // 将随机选择的起始点作为第一个大区域的中心
-            centers.add(inst.getAreas()[startId]);
-            inst.getAreas()[startId].setCenter(true);
-
-            // 贪心搜索区域中心点
-            while (centers.size() < inst.k) {
-                // 记录所有不是中心点的区域到中心点区域的最小距离
-                double[] minDistances = new double[inst.getN()];
-                for (int i = 0; i < inst.getN(); i++) {
-                    if (!inst.getAreas()[i].isCenter()) { // 只考虑未被选为中心的点
-                        double minDist = Double.MAX_VALUE;
-                        for (Area center : centers) {
-                            if (inst.dist[center.getId()][i] < minDist) {
-                                minDist = inst.dist[center.getId()][i];
-                            }
-                        }
-                        minDistances[i] = minDist;
-                    }
-                }
-
-                // 找到最大和最小距离
-                double maxMinDist = -1;
-                double minMinDist = Double.MAX_VALUE;
-                for (Area area : inst.getAreas()) {
-                    if (!area.isCenter()) { // 只考虑未被选为中心的点
-                        double minDist = minDistances[area.getId()];
-                        if (minDist > maxMinDist) {
-                            maxMinDist = minDist;
-                        }
-                        if (minDist < minMinDist) {
-                            minMinDist = minDist;
-                        }
-                    }
-                }
-                double Thre = maxMinDist - alpha * (maxMinDist - minMinDist);
-
-                List<Area> candidates = new ArrayList<>();
-                for (Area area : inst.getAreas()) {
-                    if (!area.isCenter() && minDistances[area.getId()] >= Thre) {
-                        candidates.add(area);
-                    }
-                }
-
-                if (candidates.isEmpty()) {
-                    break; // 如果没有候选中心，则退出循环
-                }
-
-                int nextId = rand.nextInt(candidates.size());
-                centers.add(candidates.get(nextId));
-                inst.getAreas()[candidates.get(nextId).getId()].setCenter(true);
-            }
-
-            // 检查是否得到足够数量的中心
-            if (centers.size() == inst.k) {
-                // 尝试求解一个简单的指派问题检查可行性
-                try {
-                    GRBEnv env = new GRBEnv();
-                    env.set(GRB.IntParam.LogToConsole, 0);
-                    env.set(GRB.IntParam.Seed, 42);
-                    GRBModel model = new GRBModel(env);
-
-                    // 创建变量
-                    GRBVar[] x = new GRBVar[inst.getN() * centers.size()];
-                    for (int i = 0; i < centers.size(); i++) {
-                        for (int j = 0; j < inst.getN(); j++) {
-                            x[i * inst.getN() + j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + centers.get(i).getId() + "_" + inst.getAreas()[j].getId());
-                            if (centers.get(i).getId() == inst.getAreas()[j].getId()) {
-                                x[i * inst.getN() + j].set(GRB.DoubleAttr.LB, 1.0);
-                                x[i * inst.getN() + j].set(GRB.DoubleAttr.UB, 1.0);
-                            }
-                        }
-                    }
-
-                    // 每个点都必须属于一个区域
-                    for (int j = 0; j < inst.getN(); j++) {
-                        GRBLinExpr expr = new GRBLinExpr();
-                        for (int i = 0; i < centers.size(); i++) {
-                            expr.addTerm(1.0, x[i * inst.getN() + j]);
-                        }
-                        model.addConstr(expr, GRB.EQUAL, 1.0, "c1_" + j);
-                    }
-
-                    // 添加容量约束
-                    double a = (1 - r) * inst.average1;
-                    double b = (1 + r) * inst.average1;
-
-                    for (int i = 0; i < centers.size(); i++) {
-                        GRBLinExpr expr = new GRBLinExpr();
-                        for (int j = 0; j < inst.getN(); j++) {
-                            expr.addTerm(inst.getAreas()[j].getActiveness()[0], x[i * inst.getN() + j]);
-                        }
-                        model.addConstr(expr, GRB.GREATER_EQUAL, a, "c2a_" + i);
-                        model.addConstr(expr, GRB.LESS_EQUAL, b, "c2b_" + i);
-                    }
-
-                    // 设置目标函数
-                    GRBLinExpr objExpr = new GRBLinExpr();
-                    for (int i = 0; i < centers.size(); i++) {
-                        for (int j = 0; j < inst.getN(); j++) {
-                            objExpr.addTerm(inst.dist[centers.get(i).getId()][j], x[i * inst.getN() + j]);
-                        }
-                    }
-                    model.setObjective(objExpr, GRB.MINIMIZE);
-
-                    // 设置求解时间限制
-                    model.set(GRB.DoubleParam.TimeLimit, timeLimit ); // 使用一半的时间限制
-
-                    // 求解
-                    model.optimize();
-
-                    // 检查解的可行性
-                    if (model.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
-                            model.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
-
-                        double objVal = model.get(GRB.DoubleAttr.ObjVal);
-
-                        // 如果找到了更好的解，更新bestCenters
-                        if (objVal < Best) {
-                            Best = objVal;
-                            bestCenters.clear();
-                            for (Area center : centers) {
-                                bestCenters.add(center.getId());
-                            }
-                        }
-                    }
-
-                    model.dispose();
-                    env.dispose();
-
-                } catch (GRBException e) {
-                    System.out.println("Gurobi求解出错: " + e.getMessage());
-                }
-            }
-
-            // 清除当前迭代的中心标记，为下一次迭代做准备
-            for (Area a : inst.getAreas()) {
-                a.setCenter(false);
-            }
-
-            iter++;
-            // 调整alpha值
-            if (alpha < beta) {
-                alpha = alpha + delta;
-            } else {
-                alpha = 0;
-            }
-        }
-
-        // 如果没有找到任何可行解，返回随机中心
-        if (bestCenters.isEmpty()) {
-            Set<Integer> centerSet = new HashSet<>();
-            while (centerSet.size() < inst.k) {
-                int candidate = rand.nextInt(inst.getN());
-                if (!centerSet.contains(candidate)) {
-                    centerSet.add(candidate);
-                    bestCenters.add(candidate);
-                }
-            }
-        }
-
-        return bestCenters;
-    }
 
     public ArrayList<Integer> getCorrectSolutionCenters() throws GRBException,IOException{
         long startTime = System.currentTimeMillis(); // 获取开始时间
@@ -698,18 +528,15 @@ public class Algo {
                 }
 
 
-                // 添加约束：一个大区域内部所有小区域的一号活跃度之和加起来在[a,b]之间
-                double a = (1 - r) * inst.average1;
-                double b = (1 + r) * inst.average1;
+                // 添加约束：一个大区域内部所有小区域的一号活跃度之和加起来<=demandUpperBound
+
 
                 for (int i = 0; i < centers.size(); i++) {
                     GRBLinExpr expr = new GRBLinExpr();
-                    GRBLinExpr expr2 = new GRBLinExpr();
                     for (int j = 0; j < inst.getN(); j++) {
                         expr.addTerm(inst.getAreas()[j].getActiveness()[0], x[i * inst.getN() + j]);
                     }
-                    model.addConstr(expr, GRB.GREATER_EQUAL, a, "c2a_" + i);
-                    model.addConstr(expr, GRB.LESS_EQUAL, b, "c2b_" + i);
+                    model.addConstr(expr, GRB.LESS_EQUAL, demandUpperBound, "c2b_" + i);
 
                 }
 
@@ -810,17 +637,14 @@ public class Algo {
                 }
 
 
-                // 添加约束：一个大区域内部所有小区域的一号活跃度之和加起来在[a,b]之间
-                double a = (1 - r) * inst.average1;
-                double b = (1 + r) * inst.average1;
+
 
                 for (int i = 0; i < centers.size(); i++) {
                     GRBLinExpr expr = new GRBLinExpr();
                     for (int j = 0; j < inst.getN(); j++) {
                         expr.addTerm(inst.getAreas()[j].getActiveness()[0], x[i * inst.getN() + j]);
                     }
-                    model.addConstr(expr, GRB.GREATER_EQUAL, a, "c2a_" + i);
-                    model.addConstr(expr, GRB.LESS_EQUAL, b, "c2b_" + i);
+                    model.addConstr(expr, GRB.LESS_EQUAL, demandUpperBound, "c2b_" + i);
 
                 }
 

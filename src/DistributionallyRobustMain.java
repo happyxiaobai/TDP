@@ -3,12 +3,12 @@ import java.util.Random;
 public class DistributionallyRobustMain {
     public static void main(String[] args) throws Exception {
         // 指定输入文件和输出文件名
-        String instanceFile = "./Instances/DU200-05-8.dat";  // 使用与ChanceConstrainedMain类似的实例
-        String outputFileName = "DU200-05-8_drcc";
+        String instanceFile = "./Instances/2DU60-05-1.dat";  // 使用与ChanceConstrainedMain类似的实例
+        String outputFileName = "2DU60-05-1_drcc";
 
         // 设置分布鲁棒优化参数
         double gamma = 0.05;  // 风险参数（违反概率）
-        int numScenarios = 1000;  // 场景数量
+        int numScenarios = 10;  // 场景数量
         long seed = 12345678;  // 随机种子
         boolean useD1 = true;  // 是否使用D_1模糊集（false则使用D_2模糊集）
         double delta1 = 0.05;  // D_2模糊集参数
@@ -38,7 +38,7 @@ public class DistributionallyRobustMain {
         System.out.println("可视化图像已保存至: " + outputImagePath);
 
         // 可选：添加与确定性模型和场景近似模型的比较分析
-        runComparativeAnalysis(instance, scenarios, gamma, seed, outputFileName);
+//        runComparativeAnalysis(instance, scenarios, gamma, seed, outputFileName);
     }
 
     // 生成随机场景

@@ -1,5 +1,3 @@
-import Jama.EigenvalueDecomposition;
-import Jama.Matrix;
 import gurobi.*;
 
 import java.io.BufferedWriter;
@@ -31,6 +29,8 @@ public class DistributionallyRobustAlgo {
     private boolean useJointChance; // 是否使用联合机会约束
     private double[] individualGammas; // Bonferroni近似的个体风险分配
 
+    private double demandUpperBound; // 存储需求上限
+
     // 时间限制和迭代限制
     private int timeLimit = 1000; // 秒
     private int maxIterations = 100;
@@ -59,7 +59,7 @@ public class DistributionallyRobustAlgo {
             }
         }
         this.gamma = gamma;
-        this.r = 0.05; // 活动指标平衡容差
+        this.r = 0.1; // 活动指标平衡容差
         this.rand = new Random(seed);
         this.zones = new ArrayList[inst.k];
         this.useD1 = useD1;
@@ -69,6 +69,11 @@ public class DistributionallyRobustAlgo {
 
         // 计算样本均值和协方差矩阵
         calculateMomentInformation();
+        double totalMeanDemand = 0;
+        for (int i = 0; i < inst.getN(); i++) {
+            totalMeanDemand += meanVector[i];
+        }
+        this.demandUpperBound = (1 + r) * (totalMeanDemand / inst.k);
 
         // 如果使用Bonferroni近似，初始化个体风险分配
         if (useJointChance) {
@@ -254,7 +259,7 @@ public class DistributionallyRobustAlgo {
                 minEigenvalue = Math.min(minEigenvalue, ev);
             }
 
-            double epsilon = 1e-10; // 数值稳定性的容差
+            double epsilon = 1e-15; // 数值稳定性的容差
             System.out.println("最小特征值: " + minEigenvalue);
 
             return minEigenvalue >= -epsilon;
@@ -265,43 +270,48 @@ public class DistributionallyRobustAlgo {
     }
 
     private void ensurePSDMatrix() {
-        int n = covarianceMatrix.length;
-
-        try {
-            // 将协方差矩阵转换为JAMA的Matrix对象
-            Matrix matrix = new Matrix(covarianceMatrix);
-
-            // 计算特征值分解
-            EigenvalueDecomposition eig = matrix.eig();
-            double[] eigenvalues = eig.getRealEigenvalues();
-            Matrix V = eig.getV(); // 特征向量矩阵
-
-            // 将负特征值替换为小正数
-            double epsilon = 1e-6;
-            Matrix D = new Matrix(n, n); // 对角矩阵
-            for (int i = 0; i < n; i++) {
-                D.set(i, i, Math.max(eigenvalues[i], epsilon));
-            }
-
-            // 重建矩阵：Σ = V * D * V^T
-            Matrix reconstructed = V.times(D).times(V.transpose());
-
-            // 更新协方差矩阵
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < n; j++) {
-                    covarianceMatrix[i][j] = reconstructed.get(i, j);
-                }
-            }
-
-            System.out.println("已修正协方差矩阵，确保半正定性");
-        } catch (Exception e) {
-            System.out.println("特征值分解修正失败，使用简单对角加载: " + e.getMessage());
-
-            // 回退策略：简单对角加载
-            for (int i = 0; i < n; i++) {
-                covarianceMatrix[i][i] += 1e-4;
-            }
+        // 在对角线上添加一个小的正数
+        double epsilon = 1e-5; // 略大于最小负特征值的绝对值
+        for (int i = 0; i < covarianceMatrix.length; i++) {
+            covarianceMatrix[i][i] += epsilon;
         }
+//        int n = covarianceMatrix.length;
+//
+//        try {
+//            // 将协方差矩阵转换为JAMA的Matrix对象
+//            Matrix matrix = new Matrix(covarianceMatrix);
+//
+//            // 计算特征值分解
+//            EigenvalueDecomposition eig = matrix.eig();
+//            double[] eigenvalues = eig.getRealEigenvalues();
+//            Matrix V = eig.getV(); // 特征向量矩阵
+//
+//            // 将负特征值替换为小正数
+//            double epsilon = 1e-6;
+//            Matrix D = new Matrix(n, n); // 对角矩阵
+//            for (int i = 0; i < n; i++) {
+//                D.set(i, i, Math.max(eigenvalues[i], epsilon));
+//            }
+//
+//            // 重建矩阵：Σ = V * D * V^T
+//            Matrix reconstructed = V.times(D).times(V.transpose());
+//
+//            // 更新协方差矩阵
+//            for (int i = 0; i < n; i++) {
+//                for (int j = 0; j < n; j++) {
+//                    covarianceMatrix[i][j] = reconstructed.get(i, j);
+//                }
+//            }
+//
+//            System.out.println("已修正协方差矩阵，确保半正定性");
+//        } catch (Exception e) {
+//            System.out.println("特征值分解修正失败，使用简单对角加载: " + e.getMessage());
+//
+//            // 回退策略：简单对角加载
+//            for (int i = 0; i < n; i++) {
+//                covarianceMatrix[i][i] += 1e-4;
+//            }
+//        }
     }
     /**
      * 选择初始区域中心
@@ -366,7 +376,6 @@ public class DistributionallyRobustAlgo {
             algo.setTimeLimit(localTimeLimit);
 
             // 获取该场景下的求解结果中心点
-            //TODO 函数内部可以修改平衡约束的不等式，当前同时存在大于等于和小于等于
             //TODO 对于场景无法准确求解的情况，应该随机选择一个新的场景进行尝试，这里需要修改
             ArrayList<Integer> scenarioCenters = algo.getCorrectSolutionCenters();
 
@@ -413,7 +422,11 @@ public class DistributionallyRobustAlgo {
         env.set(GRB.IntParam.LogToConsole, 0);
         env.set(GRB.IntParam.Seed, 42);
         GRBModel model = new GRBModel(env);
-        model.set(GRB.IntParam.NonConvex, 2);
+//        model.set(GRB.IntParam.NonConvex, 2);
+        // 减少预处理步骤
+        model.set(GRB.IntParam.Presolve, 0);
+        // 正确的参数设置方式
+        model.set(GRB.IntParam.NumericFocus, 3);
 
         // 决策变量 x_ij
         GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
@@ -447,7 +460,7 @@ public class DistributionallyRobustAlgo {
             }
         }
         model.setObjective(objExpr, GRB.MINIMIZE);
-
+        model.write("SOCP.lp");
         // 设置求解时间限制
         model.set(GRB.DoubleParam.TimeLimit, timeLimit);
 
@@ -509,7 +522,8 @@ public class DistributionallyRobustAlgo {
      * 添加DRICC约束
      */
     private void addDRICCConstraint(GRBModel model, GRBVar[][] x, int j, double riskParam) throws GRBException {
-        double U = (1 + r) * inst.average1; // 区域容量上限
+        double U = demandUpperBound; // 区域容量上限
+
 
         // 构建x向量的线性表达式
         GRBLinExpr meanTerm = new GRBLinExpr();
