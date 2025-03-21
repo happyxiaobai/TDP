@@ -182,7 +182,18 @@ public class DistributionallyRobustAlgo {
         System.out.println("程序运行时间为：" + timeSpentInSeconds + "s");
         System.out.println("最终目标函数值：" + Best);
     }
-
+    private boolean isSymmetric(double[][] matrix) {
+        for (int i = 0; i < matrix.length; i++) {
+            for (int j = i + 1; j < matrix.length; j++) {
+                // 设置一个小的容差值，因为浮点数计算可能有微小的精度误差
+                double tolerance = 1e-10;
+                if (Math.abs(matrix[i][j] - matrix[j][i]) > tolerance) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
     /**
      * 计算样本矩信息（均值和协方差矩阵）
      */
@@ -222,6 +233,8 @@ public class DistributionallyRobustAlgo {
             boolean isPSDAfterFix = isPSDByEigenvalues(); // 或 isPSDByEigenvalues()
             System.out.println("修正后矩阵是否半正定: " + isPSDAfterFix);
         }
+        boolean isSymmetric = isSymmetric(covarianceMatrix);
+        System.out.println("协方差矩阵是否对称: " + isSymmetric);
     }
     private boolean isPSDByEigenvalues() {
         int n = covarianceMatrix.length;
@@ -400,6 +413,7 @@ public class DistributionallyRobustAlgo {
         env.set(GRB.IntParam.LogToConsole, 0);
         env.set(GRB.IntParam.Seed, 42);
         GRBModel model = new GRBModel(env);
+        model.set(GRB.IntParam.NonConvex, 2);
 
         // 决策变量 x_ij
         GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
@@ -646,6 +660,7 @@ public class DistributionallyRobustAlgo {
         env.set(GRB.IntParam.LogToConsole, 0);
         env.set(GRB.IntParam.Seed, 42);
         GRBModel model = new GRBModel(env);
+        model.set(GRB.IntParam.NonConvex, 2);
 
         // 决策变量 x_ij
         GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
@@ -787,6 +802,7 @@ public class DistributionallyRobustAlgo {
 
             System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
         }
+        model.optimize();
 
         // 最后一次提取解决方案
         for (int j = 0; j < centers.size(); j++) {

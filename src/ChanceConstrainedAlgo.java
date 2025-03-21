@@ -820,6 +820,7 @@ public class ChanceConstrainedAlgo {
 
             System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
         }
+        model.optimize();
 
         // 最后一次提取解决方案
         for (int j = 0; j < centers.size(); j++) {
