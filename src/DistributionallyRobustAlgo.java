@@ -1,3 +1,5 @@
+import Jama.EigenvalueDecomposition;
+import Jama.Matrix;
 import gurobi.*;
 
 import java.io.BufferedWriter;
@@ -17,6 +19,7 @@ public class DistributionallyRobustAlgo {
     private double gamma; // 机会约束风险参数
     private double[][] scenarios; // 原始场景数据
     private int numScenarios; // 场景数量
+    private int[][] scenarioDemands; // 存储所有场景下的需求
     private Random rand; // 随机数生成器
 
     // 分布鲁棒模型的参数
@@ -34,13 +37,14 @@ public class DistributionallyRobustAlgo {
 
     /**
      * 构造函数
-     * @param instance 问题实例
-     * @param scenarios 场景数据
-     * @param gamma 风险参数
-     * @param seed 随机种子
-     * @param useD1 是否使用D_1模糊集（false则使用D_2模糊集）
-     * @param delta1 D_2模糊集参数
-     * @param delta2 D_2模糊集参数
+     *
+     * @param instance       问题实例
+     * @param scenarios      场景数据
+     * @param gamma          风险参数
+     * @param seed           随机种子
+     * @param useD1          是否使用D_1模糊集（false则使用D_2模糊集）
+     * @param delta1         D_2模糊集参数
+     * @param delta2         D_2模糊集参数
      * @param useJointChance 是否使用联合机会约束（Bonferroni近似）
      */
     public DistributionallyRobustAlgo(Instance instance, double[][] scenarios, double gamma,
@@ -48,6 +52,12 @@ public class DistributionallyRobustAlgo {
         this.inst = instance;
         this.scenarios = scenarios;
         this.numScenarios = scenarios.length;
+        this.scenarioDemands = new int[numScenarios][inst.getN()];
+        for (int s = 0; s < numScenarios; s++) {
+            for (int i = 0; i < inst.getN(); i++) {
+                this.scenarioDemands[s][i] = (int) scenarios[s][i];
+            }
+        }
         this.gamma = gamma;
         this.r = 0.05; // 活动指标平衡容差
         this.rand = new Random(seed);
@@ -72,6 +82,7 @@ public class DistributionallyRobustAlgo {
 
     /**
      * 主要求解方法
+     *
      * @param filename 输出文件名
      */
     public void run(String filename) throws GRBException, IOException {
@@ -199,8 +210,86 @@ public class DistributionallyRobustAlgo {
                 covarianceMatrix[i][j] = covariance / numScenarios;
             }
         }
+
+        // 检查矩阵是否半正定
+        boolean isPSD = isPSDByEigenvalues(); // 或 isPSDByEigenvalues()
+
+        if (!isPSD) {
+            System.out.println("警告: 协方差矩阵不是半正定的，正在尝试修正...");
+            ensurePSDMatrix();
+
+            // 检查修正后的矩阵
+            boolean isPSDAfterFix = isPSDByEigenvalues(); // 或 isPSDByEigenvalues()
+            System.out.println("修正后矩阵是否半正定: " + isPSDAfterFix);
+        }
+    }
+    private boolean isPSDByEigenvalues() {
+        int n = covarianceMatrix.length;
+
+        try {
+            // 注意：这里假设你项目中可以使用适当的矩阵计算库
+            // 如Apache Commons Math或JAMA
+            // 这里给出JAMA库的示例代码
+            Jama.Matrix matrix = new Jama.Matrix(covarianceMatrix);
+            Jama.EigenvalueDecomposition eig = matrix.eig();
+            double[] eigenvalues = eig.getRealEigenvalues();
+
+
+            // 检查最小特征值是否为负
+            double minEigenvalue = Double.MAX_VALUE;
+            for (double ev : eigenvalues) {
+                minEigenvalue = Math.min(minEigenvalue, ev);
+            }
+
+            double epsilon = 1e-10; // 数值稳定性的容差
+            System.out.println("最小特征值: " + minEigenvalue);
+
+            return minEigenvalue >= -epsilon;
+        } catch (Exception e) {
+            System.out.println("特征值分解失败: " + e.getMessage());
+            return false;
+        }
     }
 
+    private void ensurePSDMatrix() {
+        int n = covarianceMatrix.length;
+
+        try {
+            // 将协方差矩阵转换为JAMA的Matrix对象
+            Matrix matrix = new Matrix(covarianceMatrix);
+
+            // 计算特征值分解
+            EigenvalueDecomposition eig = matrix.eig();
+            double[] eigenvalues = eig.getRealEigenvalues();
+            Matrix V = eig.getV(); // 特征向量矩阵
+
+            // 将负特征值替换为小正数
+            double epsilon = 1e-6;
+            Matrix D = new Matrix(n, n); // 对角矩阵
+            for (int i = 0; i < n; i++) {
+                D.set(i, i, Math.max(eigenvalues[i], epsilon));
+            }
+
+            // 重建矩阵：Σ = V * D * V^T
+            Matrix reconstructed = V.times(D).times(V.transpose());
+
+            // 更新协方差矩阵
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < n; j++) {
+                    covarianceMatrix[i][j] = reconstructed.get(i, j);
+                }
+            }
+
+            System.out.println("已修正协方差矩阵，确保半正定性");
+        } catch (Exception e) {
+            System.out.println("特征值分解修正失败，使用简单对角加载: " + e.getMessage());
+
+            // 回退策略：简单对角加载
+            for (int i = 0; i < n; i++) {
+                covarianceMatrix[i][i] += 1e-4;
+            }
+        }
+    }
     /**
      * 选择初始区域中心
      */
@@ -245,100 +334,62 @@ public class DistributionallyRobustAlgo {
 
         return candidateCenters;
     }
-
+    private Instance createScenarioInstance(int scenarioIndex) {
+        return new Instance(inst, scenarioDemands[scenarioIndex]);
+    }
     /**
      * 求解单一场景的确定性模型
      */
     private ArrayList<Integer> solveForScenario(int scenarioIndex) throws GRBException {
-        ArrayList<Integer> centers = new ArrayList<>();
-        Set<Integer> centerSet = new HashSet<>();
+        // 设置确定性场景的求解时间限制
+        int localTimeLimit = 60; // 秒
 
         try {
-            GRBEnv env = new GRBEnv();
-            env.set(GRB.IntParam.LogToConsole, 0);
-            env.set(GRB.IntParam.Seed, 42);
-            GRBModel model = new GRBModel(env);
+            // 创建基于特定场景需求的实例
+            Instance scenarioInstance = createScenarioInstance(scenarioIndex);
 
-            // 创建决策变量
-            GRBVar[][] x = new GRBVar[inst.getN()][inst.getN()];
-            for (int i = 0; i < inst.getN(); i++) {
-                for (int j = 0; j < inst.getN(); j++) {
-                    x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + j);
-                }
-            }
+            // 创建Algo对象并设置时间限制
+            Algo algo = new Algo(scenarioInstance);
+            algo.setTimeLimit(localTimeLimit);
 
-            // 每个点都必须属于一个区域
-            for (int i = 0; i < inst.getN(); i++) {
-                GRBLinExpr expr = new GRBLinExpr();
-                for (int j = 0; j < inst.getN(); j++) {
-                    expr.addTerm(1.0, x[i][j]);
-                }
-                model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
-            }
+            // 获取该场景下的求解结果中心点
+            //TODO 函数内部可以修改平衡约束的不等式，当前同时存在大于等于和小于等于
+            //TODO 对于场景无法准确求解的情况，应该随机选择一个新的场景进行尝试，这里需要修改
+            ArrayList<Integer> scenarioCenters = algo.getCorrectSolutionCenters();
 
-            // 创建p个区域中心
-            GRBLinExpr centerExpr = new GRBLinExpr();
-            for (int j = 0; j < inst.getN(); j++) {
-                centerExpr.addTerm(1.0, x[j][j]);
-            }
-            model.addConstr(centerExpr, GRB.EQUAL, inst.k, "p_centers");
-
-            // 平衡性约束
-            double U = (1 + r) * inst.average1;
-            for (int j = 0; j < inst.getN(); j++) {
-                GRBLinExpr demandExpr = new GRBLinExpr();
-                for (int i = 0; i < inst.getN(); i++) {
-                    demandExpr.addTerm(scenarios[scenarioIndex][i], x[i][j]);
-                }
-                model.addConstr(demandExpr, GRB.LESS_EQUAL, U, "capacity_" + j);
-            }
-
-            // 目标函数: 最小化总距离
-            GRBLinExpr objExpr = new GRBLinExpr();
-            for (int i = 0; i < inst.getN(); i++) {
-                for (int j = 0; j < inst.getN(); j++) {
-                    objExpr.addTerm(inst.dist[i][j], x[i][j]);
-                }
-            }
-            model.setObjective(objExpr, GRB.MINIMIZE);
-
-            // 设置求解时间限制
-            model.set(GRB.DoubleParam.TimeLimit, 30);
-
-            // 求解
-            model.optimize();
-
-            // 检查解的状态
-            if (model.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
-                    model.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
-
-                // 提取区域中心
-                for (int j = 0; j < inst.getN(); j++) {
-                    if (Math.abs(x[j][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
-                        centerSet.add(j);
+            // 如果算法未能返回足够的中心点，则随机补充
+            if (scenarioCenters.size() < inst.k) {
+                // 随机补充中心点
+                Set<Integer> centerSet = new HashSet<>(scenarioCenters);
+                while (centerSet.size() < inst.k) {
+                    int candidate = rand.nextInt(inst.getN());
+                    if (!centerSet.contains(candidate)) {
+                        centerSet.add(candidate);
+                        scenarioCenters.add(candidate);
                     }
                 }
+                System.out.println("场景 " + scenarioIndex + " 中心点不足，随机补充至 " + scenarioCenters.size() + " 个");
             }
 
-            model.dispose();
-            env.dispose();
+            return scenarioCenters;
+        } catch (Exception e) {
+            System.out.println("求解场景 " + scenarioIndex + " 时出错: " + e.getMessage());
 
-        } catch (GRBException e) {
-            System.out.println("求解场景时发生错误: " + e.getMessage());
-        }
+            // 出错时使用随机选择作为备选方案
+            ArrayList<Integer> fallbackCenters = new ArrayList<>();
+            Set<Integer> centerSet = new HashSet<>();
 
-        centers.addAll(centerSet);
-
-        // 如果中心不足，随机补充
-        while (centers.size() < inst.k) {
-            int candidate = rand.nextInt(inst.getN());
-            if (!centerSet.contains(candidate)) {
-                centers.add(candidate);
-                centerSet.add(candidate);
+            while (centerSet.size() < inst.k) {
+                int candidate = rand.nextInt(inst.getN());
+                if (!centerSet.contains(candidate)) {
+                    centerSet.add(candidate);
+                    fallbackCenters.add(candidate);
+                }
             }
-        }
 
-        return centers;
+            System.out.println("场景 " + scenarioIndex + " 求解失败，使用随机选择了 " + fallbackCenters.size() + " 个中心点");
+            return fallbackCenters;
+        }
     }
 
     /**
@@ -467,7 +518,20 @@ public class DistributionallyRobustAlgo {
 
             // 添加SOCP约束 (通过引入新变量t)
             GRBVar t = model.addVar(0, GRB.INFINITY, 0, GRB.CONTINUOUS, "t_" + j);
-            model.addQConstr(quadTerm, GRB.LESS_EQUAL, t * t, "socp1_" + j);
+
+            // 创建t的线性表达式
+            GRBLinExpr tExpr = new GRBLinExpr();
+            tExpr.addTerm(1.0, t);
+
+            // 创建t^2的二次表达式
+            GRBQuadExpr tSquared = new GRBQuadExpr();
+            tSquared.addTerm(1.0, t, t);
+
+            // 添加二阶锥约束: quadTerm <= t^2
+            // 添加二阶锥约束: x_j^T Σ x_j ≤ t^2
+            // 注意：虽然使用的是不等式，但由于t在目标函数中的作用，
+            // 在最优解处这将等价于 x_j^T Σ x_j = t^2
+            model.addQConstr(quadTerm, GRB.LESS_EQUAL, tSquared, "socp1_" + j);
 
             // 均值项 + factor * t ≤ U
             GRBLinExpr constr = new GRBLinExpr();
@@ -499,7 +563,17 @@ public class DistributionallyRobustAlgo {
 
             // 添加SOCP约束 (通过引入新变量t)
             GRBVar t = model.addVar(0, GRB.INFINITY, 0, GRB.CONTINUOUS, "t_" + j);
-            model.addQConstr(quadTerm, GRB.LESS_EQUAL, t * t, "socp2_" + j);
+
+            // 创建t的线性表达式
+            GRBLinExpr tExpr = new GRBLinExpr();
+            tExpr.addTerm(1.0, t);
+
+            // 创建t^2的二次表达式
+            GRBQuadExpr tSquared = new GRBQuadExpr();
+            tSquared.addTerm(1.0, t, t);
+
+            // 添加二阶锥约束: quadTerm <= t^2
+            model.addQConstr(quadTerm, GRB.LESS_EQUAL, tSquared, "socp2_" + j);
 
             // 均值项 + factor * t ≤ U
             GRBLinExpr constr = new GRBLinExpr();
