@@ -8,7 +8,7 @@ public class DistributionallyRobustMain {
 
         // 设置分布鲁棒优化参数
         double gamma = 0.05;  // 风险参数（违反概率）
-        int numScenarios = 10;  // 场景数量
+        int numScenarios = 100;  // 场景数量
         long seed = 12345678;  // 随机种子
 
         // 需求期望值和相对标准差

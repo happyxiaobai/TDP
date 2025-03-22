@@ -1,4 +1,6 @@
-import gurobi.*;
+import Jama.CholeskyDecomposition;
+import Jama.Matrix;
+import mosek.fusion.*;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -8,6 +10,7 @@ import java.util.*;
 /**
  * 分布鲁棒机会约束分区问题的解决方案
  * 实现基于D_1和D_2模糊集的DRICC问题以及基于Bonferroni近似的DRJCC模型
+ * 使用Mosek代替Gurobi进行求解
  */
 public class DistributionallyRobustAlgo {
     private Instance inst;
@@ -37,15 +40,6 @@ public class DistributionallyRobustAlgo {
 
     /**
      * 构造函数
-     *
-     * @param instance       问题实例
-     * @param scenarios      场景数据
-     * @param gamma          风险参数
-     * @param seed           随机种子
-     * @param useD1          是否使用D_1模糊集（false则使用D_2模糊集）
-     * @param delta1         D_2模糊集参数
-     * @param delta2         D_2模糊集参数
-     * @param useJointChance 是否使用联合机会约束（Bonferroni近似）
      */
     public DistributionallyRobustAlgo(Instance instance, double[][] scenarios, double gamma,
                                       long seed, boolean useD1, double delta1, double delta2, boolean useJointChance) {
@@ -87,10 +81,8 @@ public class DistributionallyRobustAlgo {
 
     /**
      * 主要求解方法
-     *
-     * @param filename 输出文件名
      */
-    public void run(String filename) throws GRBException, IOException {
+    public void run(String filename) throws IOException {
         long startTime = System.currentTimeMillis();
         double Best = Double.MAX_VALUE;
         ArrayList<Integer>[] BestZones = new ArrayList[inst.k];
@@ -187,18 +179,7 @@ public class DistributionallyRobustAlgo {
         System.out.println("程序运行时间为：" + timeSpentInSeconds + "s");
         System.out.println("最终目标函数值：" + Best);
     }
-    private boolean isSymmetric(double[][] matrix) {
-        for (int i = 0; i < matrix.length; i++) {
-            for (int j = i + 1; j < matrix.length; j++) {
-                // 设置一个小的容差值，因为浮点数计算可能有微小的精度误差
-                double tolerance = 1e-10;
-                if (Math.abs(matrix[i][j] - matrix[j][i]) > tolerance) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
+
     /**
      * 计算样本矩信息（均值和协方差矩阵）
      */
@@ -227,33 +208,41 @@ public class DistributionallyRobustAlgo {
             }
         }
 
-        // 检查矩阵是否半正定
-        boolean isPSD = isPSDByEigenvalues(); // 或 isPSDByEigenvalues()
+        // 检查矩阵是否对称
+        boolean isSymmetric = isSymmetric(covarianceMatrix);
+        System.out.println("协方差矩阵是否对称: " + isSymmetric);
 
+        // 检查矩阵是否半正定
+        boolean isPSD = isPSDByEigenvalues();
         if (!isPSD) {
             System.out.println("警告: 协方差矩阵不是半正定的，正在尝试修正...");
             ensurePSDMatrix();
 
-            // 检查修正后的矩阵
-            boolean isPSDAfterFix = isPSDByEigenvalues(); // 或 isPSDByEigenvalues()
+            boolean isPSDAfterFix = isPSDByEigenvalues();
             System.out.println("修正后矩阵是否半正定: " + isPSDAfterFix);
         }
-        boolean isSymmetric = isSymmetric(covarianceMatrix);
-        System.out.println("协方差矩阵是否对称: " + isSymmetric);
     }
+
+    private boolean isSymmetric(double[][] matrix) {
+        for (int i = 0; i < matrix.length; i++) {
+            for (int j = i + 1; j < matrix.length; j++) {
+                double tolerance = 1e-10;
+                if (Math.abs(matrix[i][j] - matrix[j][i]) > tolerance) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private boolean isPSDByEigenvalues() {
         int n = covarianceMatrix.length;
 
         try {
-            // 注意：这里假设你项目中可以使用适当的矩阵计算库
-            // 如Apache Commons Math或JAMA
-            // 这里给出JAMA库的示例代码
-            Jama.Matrix matrix = new Jama.Matrix(covarianceMatrix);
+            Matrix matrix = new Matrix(covarianceMatrix);
             Jama.EigenvalueDecomposition eig = matrix.eig();
             double[] eigenvalues = eig.getRealEigenvalues();
 
-
-            // 检查最小特征值是否为负
             double minEigenvalue = Double.MAX_VALUE;
             for (double ev : eigenvalues) {
                 minEigenvalue = Math.min(minEigenvalue, ev);
@@ -263,7 +252,7 @@ public class DistributionallyRobustAlgo {
             System.out.println("最小特征值: " + minEigenvalue);
 
             return minEigenvalue >= -epsilon;
-        } catch (Exception e) {
+        } catch (java.lang.Exception e) {
             System.out.println("特征值分解失败: " + e.getMessage());
             return false;
         }
@@ -275,48 +264,12 @@ public class DistributionallyRobustAlgo {
         for (int i = 0; i < covarianceMatrix.length; i++) {
             covarianceMatrix[i][i] += epsilon;
         }
-//        int n = covarianceMatrix.length;
-//
-//        try {
-//            // 将协方差矩阵转换为JAMA的Matrix对象
-//            Matrix matrix = new Matrix(covarianceMatrix);
-//
-//            // 计算特征值分解
-//            EigenvalueDecomposition eig = matrix.eig();
-//            double[] eigenvalues = eig.getRealEigenvalues();
-//            Matrix V = eig.getV(); // 特征向量矩阵
-//
-//            // 将负特征值替换为小正数
-//            double epsilon = 1e-6;
-//            Matrix D = new Matrix(n, n); // 对角矩阵
-//            for (int i = 0; i < n; i++) {
-//                D.set(i, i, Math.max(eigenvalues[i], epsilon));
-//            }
-//
-//            // 重建矩阵：Σ = V * D * V^T
-//            Matrix reconstructed = V.times(D).times(V.transpose());
-//
-//            // 更新协方差矩阵
-//            for (int i = 0; i < n; i++) {
-//                for (int j = 0; j < n; j++) {
-//                    covarianceMatrix[i][j] = reconstructed.get(i, j);
-//                }
-//            }
-//
-//            System.out.println("已修正协方差矩阵，确保半正定性");
-//        } catch (Exception e) {
-//            System.out.println("特征值分解修正失败，使用简单对角加载: " + e.getMessage());
-//
-//            // 回退策略：简单对角加载
-//            for (int i = 0; i < n; i++) {
-//                covarianceMatrix[i][i] += 1e-4;
-//            }
-//        }
     }
+
     /**
      * 选择初始区域中心
      */
-    private ArrayList<Integer> selectInitialCenters() throws GRBException {
+    private ArrayList<Integer> selectInitialCenters() {
         int InitialNum = 5; // 可调整的初始场景数
         ArrayList<Integer> candidateCenters = new ArrayList<>();
         HashMap<Integer, Integer> centerFrequency = new HashMap<>();
@@ -357,13 +310,15 @@ public class DistributionallyRobustAlgo {
 
         return candidateCenters;
     }
+
     private Instance createScenarioInstance(int scenarioIndex) {
         return new Instance(inst, scenarioDemands[scenarioIndex]);
     }
+
     /**
      * 求解单一场景的确定性模型
      */
-    private ArrayList<Integer> solveForScenario(int scenarioIndex) throws GRBException {
+    private ArrayList<Integer> solveForScenario(int scenarioIndex) {
         // 设置确定性场景的求解时间限制
         int localTimeLimit = 60; // 秒
 
@@ -376,7 +331,6 @@ public class DistributionallyRobustAlgo {
             algo.setTimeLimit(localTimeLimit);
 
             // 获取该场景下的求解结果中心点
-            //TODO 对于场景无法准确求解的情况，应该随机选择一个新的场景进行尝试，这里需要修改
             ArrayList<Integer> scenarioCenters = algo.getCorrectSolutionCenters();
 
             // 如果算法未能返回足够的中心点，则随机补充
@@ -415,99 +369,81 @@ public class DistributionallyRobustAlgo {
     }
 
     /**
-     * 生成初始可行解
+     * 生成初始可行解 - 使用Mosek代替Gurobi
      */
-    private boolean generateInitialSolution() throws GRBException {
-        GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
-
-// Set logging parameters BEFORE starting the environment
-        env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
-        env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
-        env.set(GRB.StringParam.LogFile, "");       // Empty log file path
-        env.set(GRB.IntParam.Seed, 42);
-// Now start the environment
-        env.start();
-        GRBModel model = new GRBModel(env);
-//        model.set(GRB.IntParam.NonConvex, 2);
-        // 减少预处理步骤
-        model.set(GRB.IntParam.Presolve, 0);
-        // 正确的参数设置方式
-        model.set(GRB.IntParam.NumericFocus, 3);
-
-        // 决策变量 x_ij
-        GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
-        for (int i = 0; i < inst.getN(); i++) {
-            for (int j = 0; j < centers.size(); j++) {
-                x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + centers.get(j).getId());
-                if (i == centers.get(j).getId()) {
-                    x[i][j].set(GRB.DoubleAttr.LB, 1);
-                    x[i][j].set(GRB.DoubleAttr.UB, 1);
-                }
-            }
-        }
-
-        // 约束: 每个基本单元必须且只能属于一个区域
-        for (int i = 0; i < inst.getN(); i++) {
-            GRBLinExpr expr = new GRBLinExpr();
-            for (int j = 0; j < centers.size(); j++) {
-                expr.addTerm(1.0, x[i][j]);
-            }
-            model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
-        }
-
-        // 添加分布鲁棒机会约束
-        addDistributionallyRobustConstraints(model, x);
-
-        // 目标函数: 最小化总距离
-        GRBLinExpr objExpr = new GRBLinExpr();
-        for (int i = 0; i < inst.getN(); i++) {
-            for (int j = 0; j < centers.size(); j++) {
-                objExpr.addTerm(inst.dist[i][centers.get(j).getId()], x[i][j]);
-            }
-        }
-        model.setObjective(objExpr, GRB.MINIMIZE);
-        model.write("SOCP.lp");
-        // 设置求解时间限制
-        model.set(GRB.DoubleParam.TimeLimit, timeLimit);
-
+    private boolean generateInitialSolution() throws IOException {
         try {
-            // 求解
-            model.optimize();
+            // 创建Mosek环境和优化任务
+            try {
+                // 创建Mosek Fusion模型
+                Model model = new Model("DRCC_Model");
 
-            // 检查模型状态
-            if (model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL &&
-                    model.get(GRB.IntAttr.Status) != GRB.Status.SUBOPTIMAL) {
-                model.dispose();
-                env.dispose();
-                return false;
-            }
-
-            // 提取解决方案
-            for (int j = 0; j < centers.size(); j++) {
-                zones[j] = new ArrayList<>();
+                // 决策变量 x_ij
+                Variable[][] x = new Variable[inst.getN()][centers.size()];
                 for (int i = 0; i < inst.getN(); i++) {
-                    if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
-                        zones[j].add(i);
+                    for (int j = 0; j < centers.size(); j++) {
+                        x[i][j] = model.variable("x_" + i + "_" + centers.get(j).getId(), Domain.binary());
+                        if (i == centers.get(j).getId()) {
+                            // 将中心点固定为1
+                            model.constraint(x[i][j], Domain.equalsTo(1.0));
+                        }
                     }
                 }
+
+                // 约束: 每个基本单元必须且只能属于一个区域
+                for (int i = 0; i < inst.getN(); i++) {
+                    Expression rowSum = Expression.sum(Arrays.stream(x[i]).toArray(Variable[]::new));
+                    model.constraint(rowSum, Domain.equalsTo(1.0));
+                }
+
+                // 添加分布鲁棒机会约束
+                addDistributionallyRobustConstraints(model, x);
+
+                // 目标函数: 最小化总距离
+                Expression obj = Expression.constTerm(0.0);
+                for (int i = 0; i < inst.getN(); i++) {
+                    for (int j = 0; j < centers.size(); j++) {
+                        obj = Expression.add(obj,
+                                Expression.mul(inst.dist[i][centers.get(j).getId()], x[i][j]));
+                    }
+                }
+                model.objective(ObjectiveSense.Minimize, obj);
+
+                // 设置Mosek参数
+                model.setSolverParam("intpntCoTolRelGap", 1.0e-7);
+                model.setSolverParam("mioMaxTime", timeLimit);
+
+                // 求解模型
+                model.solve();
+
+                // 检查模型状态
+                if (model.getPrimalSolutionStatus() != SolutionStatus.Optimal &&
+                        model.getPrimalSolutionStatus() != SolutionStatus.Feasible) {
+                    return false;
+                }
+
+                // 提取解决方案
+                for (int j = 0; j < centers.size(); j++) {
+                    zones[j] = new ArrayList<>();
+                    for (int i = 0; i < inst.getN(); i++) {
+                        if (Math.abs(x[i][j].level()[0] - 1.0) < 1e-6) {
+                            zones[j].add(i);
+                        }
+                    }
+                }
+
+                return true;
             }
-
-            model.dispose();
-            env.dispose();
-            return true;
-
-        } catch (GRBException e) {
-            System.out.println("求解模型时发生错误: " + e.getMessage());
-            model.dispose();
-            env.dispose();
+        } catch (mosek.fusion.SolutionError e) {
+            System.out.println("Mosek求解模型时发生错误: " + e.getMessage());
             return false;
         }
     }
 
     /**
-     * 添加分布鲁棒机会约束
+     * 添加分布鲁棒机会约束 - 使用Mosek实现
      */
-    private void addDistributionallyRobustConstraints(GRBModel model, GRBVar[][] x) throws GRBException {
+    private void addDistributionallyRobustConstraints(Model model, Variable[][] x) {
         double U = (1 + r) * inst.average1; // 区域容量上限
 
         if (useJointChance) {
@@ -525,95 +461,102 @@ public class DistributionallyRobustAlgo {
     }
 
     /**
-     * 添加DRICC约束
+     * 添加DRICC约束 - 使用Mosek实现
      */
-    private void addDRICCConstraint(GRBModel model, GRBVar[][] x, int j, double riskParam) throws GRBException {
+    private void addDRICCConstraint(Model model, Variable[][] x, int j, double riskParam) {
         double U = demandUpperBound; // 区域容量上限
 
-
-        // 构建x向量的线性表达式
-        GRBLinExpr meanTerm = new GRBLinExpr();
+        // 构建均值项
+        Expression meanTerm = Expression.constTerm(0.0);
         for (int i = 0; i < inst.getN(); i++) {
-            meanTerm.addTerm(meanVector[i], x[i][j]);
+            meanTerm = Expression.add(meanTerm,
+                    Expression.mul(meanVector[i], x[i][j]));
         }
 
+        double factor;
         if (useD1) {
             // 使用D_1模糊集的约束
             // μ^T*x_j + sqrt((1-γ)/γ)*sqrt(x_j^T*Σ*x_j) ≤ U
-            double factor = Math.sqrt((1 - riskParam) / riskParam);
-
-            // 创建二次约束的表达式
-            GRBQuadExpr quadTerm = new GRBQuadExpr();
-            for (int i = 0; i < inst.getN(); i++) {
-                for (int k = 0; k < inst.getN(); k++) {
-                    quadTerm.addTerm(covarianceMatrix[i][k], x[i][j], x[k][j]);
-                }
-            }
-
-            // 添加SOCP约束 (通过引入新变量t)
-            GRBVar t = model.addVar(0, GRB.INFINITY, 0, GRB.CONTINUOUS, "t_" + j);
-
-            // 创建t的线性表达式
-            GRBLinExpr tExpr = new GRBLinExpr();
-            tExpr.addTerm(1.0, t);
-
-            // 创建t^2的二次表达式
-            GRBQuadExpr tSquared = new GRBQuadExpr();
-            tSquared.addTerm(1.0, t, t);
-
-            // 添加二阶锥约束: quadTerm <= t^2
-            // 添加二阶锥约束: x_j^T Σ x_j ≤ t^2
-            // 注意：虽然使用的是不等式，但由于t在目标函数中的作用，
-            // 在最优解处这将等价于 x_j^T Σ x_j = t^2
-            model.addQConstr(quadTerm, GRB.LESS_EQUAL, tSquared, "socp1_" + j);
-
-            // 均值项 + factor * t ≤ U
-            GRBLinExpr constr = new GRBLinExpr();
-            constr.add(meanTerm);
-            constr.addTerm(factor, t);
-            model.addConstr(constr, GRB.LESS_EQUAL, U, "dr_capacity_" + j);
-
+            factor = Math.sqrt((1 - riskParam) / riskParam);
         } else {
             // 使用D_2模糊集的约束
-            double factor;
-
             if (delta1 / delta2 <= riskParam) {
-                // 第一种情况的约束
-                // μ^T*x_j + (sqrt(δ_1) + sqrt((1-γ)/γ)*(δ_2-δ_1))*sqrt(x_j^T*Σ*x_j) ≤ U
+                // 第一种情况
                 factor = Math.sqrt(delta1) + Math.sqrt((1 - riskParam) / riskParam * (delta2 - delta1));
             } else {
-                // 第二种情况的约束
-                // μ^T*x_j + sqrt(δ_2/γ)*sqrt(x_j^T*Σ*x_j) ≤ U
+                // 第二种情况
                 factor = Math.sqrt(delta2 / riskParam);
             }
+        }
 
-            // 创建二次约束的表达式
-            GRBQuadExpr quadTerm = new GRBQuadExpr();
+        // 创建辅助变量t
+        Variable t = model.variable("t_" + j, Domain.greaterThan(0.0));
+
+        // 创建二次项 x_j^T*Σ*x_j
+        // 注意：Mosek处理SOCP约束的方式与Gurobi不同，需要使用Mosek的Fusion接口
+
+        // 我们需要创建表达式 sqrt(x_j^T*Σ*x_j) ≤ t
+        // 在Mosek中，这等价于 (t, x_j*A) ∈ Q^{n+1}
+        // 其中A是Σ的矩阵平方根 (A*A^T = Σ)
+
+        // 使用Cholesky分解获取矩阵平方根
+        Matrix covMatrix = new Matrix(covarianceMatrix);
+        CholeskyDecomposition chol = new CholeskyDecomposition(covMatrix);
+
+        // 如果Cholesky分解成功
+        if (chol.isSPD()) {
+            Matrix cholL = chol.getL();
+            double[][] L = cholL.getArray();
+
+            // 创建变量向量x_j
+            Expression[] xExpr = new Expression[inst.getN()];
             for (int i = 0; i < inst.getN(); i++) {
+                xExpr[i] = x[i][j];
+            }
+
+            // 创建A*x表达式
+            Expression[] Ax = new Expression[inst.getN()];
+            for (int i = 0; i < inst.getN(); i++) {
+                Ax[i] = Expression.constTerm(0.0);
                 for (int k = 0; k < inst.getN(); k++) {
-                    quadTerm.addTerm(covarianceMatrix[i][k], x[i][j], x[k][j]);
+                    Ax[i] = Expression.add(Ax[i], Expression.mul(L[i][k], x[k][j]));
                 }
             }
 
-            // 添加SOCP约束 (通过引入新变量t)
-            GRBVar t = model.addVar(0, GRB.INFINITY, 0, GRB.CONTINUOUS, "t_" + j);
+            // 创建二阶锥约束 (t, Ax) ∈ Q^{n+1}
+            model.constraint(Expr.vstack(t, Ax), Domain.inQCone());
 
-            // 创建t的线性表达式
-            GRBLinExpr tExpr = new GRBLinExpr();
-            tExpr.addTerm(1.0, t);
+            // 添加均值+因子*t ≤ U的线性约束
+            model.constraint(
+                    Expression.add(meanTerm, Expression.mul(factor, t)),
+                    Domain.lessThan(U));
+        } else {
+            // 如果Cholesky分解失败，尝试使用对角化方法
+            System.out.println("警告：Cholesky分解失败，尝试使用替代方法");
 
-            // 创建t^2的二次表达式
-            GRBQuadExpr tSquared = new GRBQuadExpr();
-            tSquared.addTerm(1.0, t, t);
+            // 创建二次表达式
+            Expression quadExpr = Expression.constTerm(0.0);
+            for (int i = 0; i < inst.getN(); i++) {
+                for (int k = 0; k < inst.getN(); k++) {
+                    quadExpr = Expression.add(quadExpr,
+                            Expression.mul(covarianceMatrix[i][k], Expression.mul(x[i][j], x[k][j])));
+                }
+            }
 
-            // 添加二阶锥约束: quadTerm <= t^2
-            model.addQConstr(quadTerm, GRB.LESS_EQUAL, tSquared, "socp2_" + j);
+            // 创建辅助变量q表示二次项
+            Variable q = model.variable("q_" + j, Domain.greaterThan(0.0));
 
-            // 均值项 + factor * t ≤ U
-            GRBLinExpr constr = new GRBLinExpr();
-            constr.add(meanTerm);
-            constr.addTerm(factor, t);
-            model.addConstr(constr, GRB.LESS_EQUAL, U, "dr_capacity_" + j);
+            // 添加约束 quadExpr ≤ q
+            model.constraint(quadExpr, Domain.lessThan(q));
+
+            // 添加约束 sqrt(q) ≤ t，即 (t, 0.5, q) ∈ Q^3_r (旋转二阶锥)
+            model.constraint(Expr.vstack(t, Expression.constTerm(0.5), q),
+                    Domain.inRotatedQCone());
+
+            // 添加均值+因子*t ≤ U的线性约束
+            model.constraint(
+                    Expression.add(meanTerm, Expression.mul(factor, t)),
+                    Domain.lessThan(U));
         }
     }
 
@@ -668,185 +611,171 @@ public class DistributionallyRobustAlgo {
     }
 
     /**
-     * 确保每个区域的连通性
+     * 确保每个区域的连通性 - 使用Mosek实现
      */
-    private void ensureConnectivity() throws GRBException {
+    private void ensureConnectivity() throws IOException {
         boolean allConnected = false;
         int iteration = 0;
         int maxIterations = 1000; // 限制迭代次数
 
-        // 创建环境和模型
-        GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
+        try {
+            Model model = new Model("Connectivity_Model");
 
-// Set logging parameters BEFORE starting the environment
-        env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
-        env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
-        env.set(GRB.StringParam.LogFile, "");       // Empty log file path
-        env.set(GRB.IntParam.Seed, 42);
-// Now start the environment
-        env.start();
-        GRBModel model = new GRBModel(env);
-        model.set(GRB.IntParam.NonConvex, 2);
-
-        // 决策变量 x_ij
-        GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
-        for (int i = 0; i < inst.getN(); i++) {
-            for (int j = 0; j < centers.size(); j++) {
-                x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + centers.get(j).getId());
-                if (i == centers.get(j).getId()) {
-                    x[i][j].set(GRB.DoubleAttr.LB, 1);
-                    x[i][j].set(GRB.DoubleAttr.UB, 1);
-                }
-            }
-        }
-
-        // 约束: 每个基本单元必须且只能属于一个区域
-        for (int i = 0; i < inst.getN(); i++) {
-            GRBLinExpr expr = new GRBLinExpr();
-            for (int j = 0; j < centers.size(); j++) {
-                expr.addTerm(1.0, x[i][j]);
-            }
-            model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
-        }
-
-        // 添加分布鲁棒机会约束
-        addDistributionallyRobustConstraints(model, x);
-
-        // 目标函数: 最小化总距离
-        GRBLinExpr objExpr = new GRBLinExpr();
-        for (int i = 0; i < inst.getN(); i++) {
-            for (int j = 0; j < centers.size(); j++) {
-                objExpr.addTerm(inst.dist[i][centers.get(j).getId()], x[i][j]);
-            }
-        }
-        model.setObjective(objExpr, GRB.MINIMIZE);
-
-        // 迭代添加连通性约束
-        while (!allConnected && iteration < maxIterations) {
-            iteration++;
-
-            // 检查所有区域是否连通
-            boolean hasDisconnection = false;
-            Map<Integer, List<ArrayList<Integer>>> allDisconnectedComponents = new HashMap<>();
-
-            // 先获取当前解
-            if (iteration > 1) {
-                // 提取当前解决方案
+            // 决策变量 x_ij
+            Variable[][] x = new Variable[inst.getN()][centers.size()];
+            for (int i = 0; i < inst.getN(); i++) {
                 for (int j = 0; j < centers.size(); j++) {
-                    zones[j] = new ArrayList<>();
-                    for (int i = 0; i < inst.getN(); i++) {
-                        if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
-                            zones[j].add(i);
-                        }
+                    x[i][j] = model.variable("x_" + i + "_" + centers.get(j).getId(), Domain.binary());
+                    if (i == centers.get(j).getId()) {
+                        model.constraint(x[i][j], Domain.equalsTo(1.0));
                     }
                 }
             }
 
-            // 对每个区域检查连通性
-            for (int j = 0; j < centers.size(); j++) {
-                if (zones[j] == null || zones[j].isEmpty()) {
-                    continue;
-                }
-
-                ArrayList<ArrayList<Integer>> components = findConnectedComponents(zones[j]);
-
-                if (components.size() > 1) {
-                    hasDisconnection = true;
-
-                    // 找出中心所在的连通组件
-                    int centerComponentIndex = -1;
-                    for (int c = 0; c < components.size(); c++) {
-                        if (components.get(c).contains(centers.get(j).getId())) {
-                            centerComponentIndex = c;
-                            break;
-                        }
-                    }
-
-                    // 保存不包含中心的连通组件
-                    List<ArrayList<Integer>> disconnectedComponents = new ArrayList<>();
-                    for (int c = 0; c < components.size(); c++) {
-                        if (c != centerComponentIndex) {
-                            disconnectedComponents.add(components.get(c));
-                        }
-                    }
-
-                    if (!disconnectedComponents.isEmpty()) {
-                        allDisconnectedComponents.put(j, disconnectedComponents);
-                    }
-                }
+            // 约束: 每个基本单元必须且只能属于一个区域
+            for (int i = 0; i < inst.getN(); i++) {
+                Expression rowSum = Expression.sum(Arrays.stream(x[i]).toArray(Variable[]::new));
+                model.constraint(rowSum, Domain.equalsTo(1.0));
             }
 
-            if (!hasDisconnection) {
-                allConnected = true;
-                continue;
+            // 添加分布鲁棒机会约束
+            addDistributionallyRobustConstraints(model, x);
+
+            // 目标函数: 最小化总距离
+            Expression obj = Expression.constTerm(0.0);
+            for (int i = 0; i < inst.getN(); i++) {
+                for (int j = 0; j < centers.size(); j++) {
+                    obj = Expression.add(obj,
+                            Expression.mul(inst.dist[i][centers.get(j).getId()], x[i][j]));
+                }
             }
+            model.objective(ObjectiveSense.Minimize, obj);
 
-            // 添加连通性约束
-            int constraintCounter = 0;
-            for (Map.Entry<Integer, List<ArrayList<Integer>>> entry : allDisconnectedComponents.entrySet()) {
-                int districtIndex = entry.getKey();
-                List<ArrayList<Integer>> disconnectedComponents = entry.getValue();
+            // 记录已添加的约束总数
+            int totalConstraints = 0;
 
-                for (ArrayList<Integer> component : disconnectedComponents) {
-                    // 找出该组件的邻居
-                    HashSet<Integer> neighbors = new HashSet<>();
-                    for (int node : component) {
-                        for (int neighbor : inst.getAreas()[node].getNeighbors()) {
-                            if (!component.contains(neighbor)) {
-                                neighbors.add(neighbor);
+            while (!allConnected && iteration < maxIterations) {
+                iteration++;
+
+                // 求解模型
+                model.solve();
+
+                // 检查模型状态
+                if (model.getPrimalSolutionStatus() != SolutionStatus.Optimal &&
+                        model.getPrimalSolutionStatus() != SolutionStatus.Feasible) {
+                    System.out.println("连通性处理迭代 " + iteration + " 失败，模型无解");
+                    break;
+                }
+
+                // 检查所有区域是否连通
+                boolean hasDisconnection = false;
+                Map<Integer, List<ArrayList<Integer>>> allDisconnectedComponents = new HashMap<>();
+
+                // 提取当前解
+                if (iteration > 1) {
+                    for (int j = 0; j < centers.size(); j++) {
+                        zones[j] = new ArrayList<>();
+                        for (int i = 0; i < inst.getN(); i++) {
+                            if (Math.abs(x[i][j].level()[0] - 1.0) < 1e-6) {
+                                zones[j].add(i);
                             }
                         }
                     }
+                }
 
-                    // 添加约束: 组件中的所有节点都分配给区域districtIndex，或至少有一个邻居也分配给该区域
-                    GRBLinExpr constrExpr = new GRBLinExpr();
+                // 对每个区域检查连通性
+                for (int j = 0; j < centers.size(); j++) {
+                    ArrayList<ArrayList<Integer>> components = findConnectedComponents(zones[j]);
 
-                    // 对所有的邻居节点
-                    for (int neighbor : neighbors) {
-                        constrExpr.addTerm(1.0, x[neighbor][districtIndex]);
+                    if (components.size() > 1) {
+                        hasDisconnection = true;
+
+                        // 找出中心所在的连通组件
+                        int centerComponentIndex = -1;
+                        for (int c = 0; c < components.size(); c++) {
+                            if (components.get(c).contains(centers.get(j).getId())) {
+                                centerComponentIndex = c;
+                                break;
+                            }
+                        }
+
+                        // 保存不包含中心的连通组件
+                        List<ArrayList<Integer>> disconnectedComponents = new ArrayList<>();
+                        for (int c = 0; c < components.size(); c++) {
+                            if (c != centerComponentIndex) {
+                                disconnectedComponents.add(components.get(c));
+                            }
+                        }
+
+                        if (!disconnectedComponents.isEmpty()) {
+                            allDisconnectedComponents.put(j, disconnectedComponents);
+                        }
                     }
+                }
 
-                    // 对当前组件中的所有节点
-                    for (int node : component) {
-                        constrExpr.addTerm(-1.0, x[node][districtIndex]);
+                if (!hasDisconnection) {
+                    allConnected = true;
+                    continue;
+                }
+
+                // 添加连通性约束
+                int constraintCounter = 0;
+                for (Map.Entry<Integer, List<ArrayList<Integer>>> entry : allDisconnectedComponents.entrySet()) {
+                    int districtIndex = entry.getKey();
+                    List<ArrayList<Integer>> disconnectedComponents = entry.getValue();
+
+                    for (ArrayList<Integer> component : disconnectedComponents) {
+                        // 找出该组件的邻居
+                        HashSet<Integer> neighbors = new HashSet<>();
+                        for (int node : component) {
+                            for (int neighbor : inst.getAreas()[node].getNeighbors()) {
+                                if (!component.contains(neighbor)) {
+                                    neighbors.add(neighbor);
+                                }
+                            }
+                        }
+
+                        // 添加约束: 组件中的所有节点都分配给区域districtIndex，或至少有一个邻居也分配给该区域
+                        Expression constrExpr = Expression.constTerm(0.0);
+
+                        // 对所有的邻居节点
+                        for (int neighbor : neighbors) {
+                            constrExpr = Expression.add(constrExpr, x[neighbor][districtIndex]);
+                        }
+
+                        // 对当前组件中的所有节点
+                        for (int node : component) {
+                            constrExpr = Expression.sub(constrExpr, x[node][districtIndex]);
+                        }
+
+                        model.constraint(constrExpr, Domain.greaterThan(1 - component.size()));
+                        constraintCounter++;
+                        totalConstraints++;
                     }
+                }
 
-                    model.addConstr(constrExpr, GRB.GREATER_EQUAL, 1 - component.size(), "connectivity_" + iteration + "_" + constraintCounter);
-                    constraintCounter++;
+                System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
+            }
+
+            model.solve();
+
+            // 最后一次提取解决方案
+            for (int j = 0; j < centers.size(); j++) {
+                zones[j] = new ArrayList<>();
+                for (int i = 0; i < inst.getN(); i++) {
+                    if (Math.abs(x[i][j].level()[0] - 1.0) < 1e-6) {
+                        zones[j].add(i);
+                    }
                 }
             }
 
-            // 求解更新后的模型
-            model.optimize();
-
-            // 如果找不到可行解，退出
-            if (model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL &&
-                    model.get(GRB.IntAttr.Status) != GRB.Status.SUBOPTIMAL) {
-                System.out.println("连通性处理迭代 " + iteration + " 失败，模型无解");
-                break;
+            if (!allConnected) {
+                System.out.println("警告：在最大迭代次数内未能保证所有区域的连通性");
             }
-
-            System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
+        } catch (Exception e) {
+            System.out.println("确保连通性时Mosek错误: " + e.getMessage());
+            e.printStackTrace();
         }
-        model.optimize();
-
-        // 最后一次提取解决方案
-        for (int j = 0; j < centers.size(); j++) {
-            zones[j] = new ArrayList<>();
-            for (int i = 0; i < inst.getN(); i++) {
-                if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
-                    zones[j].add(i);
-                }
-            }
-        }
-
-        if (!allConnected) {
-            System.out.println("警告：在最大迭代次数内未能保证所有区域的连通性");
-        }
-
-        // 销毁模型和环境
-        model.dispose();
-        env.dispose();
     }
 
     /**
