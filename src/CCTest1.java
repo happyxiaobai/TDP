@@ -11,7 +11,7 @@ public class CCTest1 {
         double E = 50.0; // Expected value
         double[] RSDValues = {0.125, 0.25, 0.5}; // Relative standard deviation array
         double[] rValues = {0.1, 0.2, 0.3}; // Tolerance parameter values
-        double[] gammaValues = {0.7, 0.8, 0.9}; // Chance constraint risk parameter
+        double[] gammaValues = {0.3, 0.2, 0.1}; // Chance constraint risk parameter
         int[] scenarioNumValues = {500, 1000, 5000}; // Number of scenarios
         boolean[] useScenarioGeneration = {true}; // Whether to use scenario generation
         long seed = 12345678; // Random seed
@@ -23,9 +23,12 @@ public class CCTest1 {
         String outputCSVPath = "./output/chance_constrained_results.csv";
 
         // Prepare CSV file
+        // Modified code for CCTest1 class - CSV output section
+
+// Prepare CSV file
         try (BufferedWriter csvWriter = new BufferedWriter(new FileWriter(outputCSVPath))) {
-            // Write CSV header with added UseScenarioGeneration column
-            csvWriter.write("Instance,RSD,r,gamma,Scenarios,UseScenarioGeneration,Runtime(s),Objective,OutOfSamplePerformance");
+            // Write CSV header with modified columns - replacing Instance with NumUnits and NumRegions
+            csvWriter.write("NumUnits,NumRegions,RSD,r,gamma,Scenarios,UseScenarioGeneration,Runtime(s),Objective,OutOfSamplePerformance");
             csvWriter.newLine();
 
             // Get all .dat files in instances directory
@@ -59,24 +62,22 @@ public class CCTest1 {
 
                                     // Generate random scenarios
                                     Instance instance = new Instance(instanceFile.getPath());
+
+                                    // Get the number of basic units and regions from the instance
+                                    int numUnits = instance.getN();
+                                    int numRegions = instance.k;
+
                                     double[][] scenarios = generateScenarios(
-                                            instance.getN(), numScenarios, E, RSD, seed
+                                            numUnits, numScenarios, E, RSD, seed
                                     );
 
                                     // Record start time
                                     long startTime = System.currentTimeMillis();
 
-                                    // Create algorithm instance - Note: need to modify ChanceConstrainedAlgo constructor to support r parameter
+                                    // Create algorithm instance
                                     ChanceConstrainedAlgo algo = new ChanceConstrainedAlgo(
                                             instance, scenarios, gamma, seed, r
                                     );
-
-                                    // Run algorithm
-//                                    String outputFileName = String.format(
-//                                            "CC_%s_RSD%.3f_r%.1f_gamma%.1f_scen%d_scenario%s",
-//                                            instanceName.replace(".dat", ""),
-//                                            RSD, r, gamma, numScenarios, useScenario ? "true" : "false"
-//                                    );
 
                                     // Run algorithm and get objective value
                                     double objectiveValue = 0;
@@ -87,19 +88,21 @@ public class CCTest1 {
                                         System.err.println("Error running experiment: " + e.getMessage());
                                         continue;
                                     }
-
+                                    if (objectiveValue == -1) {
+                                        System.out.println("Error: Objective value is -1, skipping this instance:" + instanceName);
+                                    }
                                     // Calculate runtime
                                     long endTime = System.currentTimeMillis();
                                     double runtime = (endTime - startTime) / 1000.0;
 
                                     // Test out-of-sample performance
                                     double outOfSamplePerformance = testOutOfSamplePerformance(
-                                            instance, algo, E, RSD, testSeed, r, numScenarios);
+                                            instance, algo, E, RSD, testSeed, r, numTestScenarios);
 
-                                    // Write to CSV file with the added useScenario field
+                                    // Write to CSV file with the modified fields (numUnits and numRegions instead of instanceName)
                                     csvWriter.write(String.format(
-                                            "%s,%.3f,%.1f,%.1f,%d,%s,%.3f,%.4f,%.4f",
-                                            instanceName, RSD, r, gamma, numScenarios,
+                                            "%d,%d,%.3f,%.1f,%.1f,%d,%s,%.3f,%.4f,%.4f",
+                                            numUnits, numRegions, RSD, r, gamma, numScenarios,
                                             useScenario ? "true" : "false",
                                             runtime, objectiveValue, outOfSamplePerformance
                                     ));
@@ -148,12 +151,12 @@ public class CCTest1 {
      * Tests the out-of-sample performance of a solution by checking constraint satisfaction
      * across newly generated scenarios not used during optimization.
      *
-     * @param instance The problem instance
-     * @param algo The algorithm with a computed solution
-     * @param E Expected demand value
-     * @param RSD Relative standard deviation for demand generation
-     * @param testSeed Random seed for test scenario generation
-     * @param r Capacity tolerance parameter
+     * @param instance         The problem instance
+     * @param algo             The algorithm with a computed solution
+     * @param E                Expected demand value
+     * @param RSD              Relative standard deviation for demand generation
+     * @param testSeed         Random seed for test scenario generation
+     * @param r                Capacity tolerance parameter
      * @param numTestScenarios Number of test scenarios to generate
      * @return The percentage of test scenarios where constraints are satisfied
      */

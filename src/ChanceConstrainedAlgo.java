@@ -257,26 +257,39 @@ public class ChanceConstrainedAlgo {
     }
 
     // 使用精确方法生成初始可行解
+    // Modified method with global time limit of 1200 seconds
     private boolean generateInitialSolutionWithExactMethod() throws GRBException {
+        // Record the start time
+        long startTime = System.currentTimeMillis();
+        final long TIME_LIMIT_MS = 1200 * 1000; // 1200 seconds in milliseconds
+
         boolean feasible = false;
         boolean centersChanged = true;
 
         while (centersChanged) {
+            // Check if the global time limit has been exceeded
+            if (System.currentTimeMillis() - startTime > TIME_LIMIT_MS) {
+                System.out.println("Global time limit of 1200 seconds exceeded in exact method");
+                return false;
+            }
+
             centersChanged = false;
 
-            GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
-
-// Set logging parameters BEFORE starting the environment
-            env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
-            env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
-            env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+            GRBEnv env = new GRBEnv(true);
+            env.set(GRB.IntParam.OutputFlag, 0);
+            env.set(GRB.IntParam.LogToConsole, 0);
+            env.set(GRB.StringParam.LogFile, "");
             env.set(GRB.IntParam.Seed, 42);
-// Now start the environment
             env.start();
 
             GRBModel model = new GRBModel(env);
 
-            // 决策变量 x_ij
+            // Calculate remaining time for solver
+            long remainingTimeMs = TIME_LIMIT_MS - (System.currentTimeMillis() - startTime);
+            double remainingTimeSec = Math.max(1.0, remainingTimeMs / 1000.0);
+            model.set(GRB.DoubleParam.TimeLimit, remainingTimeSec);
+
+            // Decision variables x_ij
             GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
             for (int i = 0; i < inst.getN(); i++) {
                 for (int j = 0; j < centers.size(); j++) {
@@ -288,13 +301,13 @@ public class ChanceConstrainedAlgo {
                 }
             }
 
-            // 场景违反标志 z_omega
+            // Scenario violation flags z_omega
             GRBVar[] z = new GRBVar[numScenarios];
             for (int s = 0; s < numScenarios; s++) {
                 z[s] = model.addVar(0, 1, 0, GRB.BINARY, "z_" + s);
             }
 
-            // 约束: 每个基本单元必须且只能属于一个区域
+            // Constraint: each basic unit must belong to exactly one district
             for (int i = 0; i < inst.getN(); i++) {
                 GRBLinExpr expr = new GRBLinExpr();
                 for (int j = 0; j < centers.size(); j++) {
@@ -303,9 +316,9 @@ public class ChanceConstrainedAlgo {
                 model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
             }
 
-            // 容量上限约束 - 对所有场景
-            double U = 0; // 区域最大容量上限
-            double M = 0; // 足够大的数
+            // Capacity constraints for all scenarios
+            double U = 0; // Region maximum capacity
+            double M = 0; // Big M value
 
             for (int j = 0; j < centers.size(); j++) {
                 for (int s = 0; s < numScenarios; s++) {
@@ -320,7 +333,7 @@ public class ChanceConstrainedAlgo {
                 }
             }
 
-            // 场景违反限制
+            // Scenario violation limit constraint
             GRBLinExpr violationExpr = new GRBLinExpr();
             for (int s = 0; s < numScenarios; s++) {
                 violationExpr.addTerm(1.0, z[s]);
@@ -328,7 +341,7 @@ public class ChanceConstrainedAlgo {
             int maxViolations = (int) Math.floor(gamma * numScenarios);
             model.addConstr(violationExpr, GRB.LESS_EQUAL, maxViolations, "violations");
 
-            // 设置目标函数: 最小化总距离
+            // Objective function: minimize total distance
             GRBLinExpr objExpr = new GRBLinExpr();
             for (int i = 0; i < inst.getN(); i++) {
                 for (int j = 0; j < centers.size(); j++) {
@@ -337,28 +350,43 @@ public class ChanceConstrainedAlgo {
             }
             model.setObjective(objExpr, GRB.MINIMIZE);
 
-            // 添加连通性约束的迭代过程
+            // Connectivity constraint iterative process
             boolean connectivityViolation = true;
             int connectivityIterations = 0;
             int maxConnectivityIterations = 1000;
             int totalConstraints = 0;
 
             while (connectivityViolation && connectivityIterations < maxConnectivityIterations) {
-                connectivityIterations++;
-
-                // 求解当前模型
-                model.optimize();
-
-                // 检查模型状态
-                if (model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL &&
-                        model.get(GRB.IntAttr.Status) != GRB.Status.SUBOPTIMAL) {
-                    // 模型不可行
+                // Check if global time limit has been exceeded
+                if (System.currentTimeMillis() - startTime > TIME_LIMIT_MS) {
+                    System.out.println("Global time limit exceeded during connectivity iterations");
                     model.dispose();
                     env.dispose();
                     return false;
                 }
 
-                // 提取当前解
+                connectivityIterations++;
+
+                // Solve current model
+                model.optimize();
+
+                // Check model status
+                if (model.get(GRB.IntAttr.Status) == GRB.Status.TIME_LIMIT) {
+                    System.out.println("Optimization timed out on connectivity iteration " + connectivityIterations);
+                    model.dispose();
+                    env.dispose();
+                    return false;
+                }
+
+                if (model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL &&
+                        model.get(GRB.IntAttr.Status) != GRB.Status.SUBOPTIMAL) {
+                    // Model is infeasible
+                    model.dispose();
+                    env.dispose();
+                    return false;
+                }
+
+                // Extract current solution
                 for (int j = 0; j < centers.size(); j++) {
                     zones[j] = new ArrayList<>();
                     for (int i = 0; i < inst.getN(); i++) {
@@ -368,7 +396,7 @@ public class ChanceConstrainedAlgo {
                     }
                 }
 
-                // 检查连通性
+                // Check connectivity
                 connectivityViolation = false;
                 int constraintCounter = 0;
 
@@ -378,7 +406,7 @@ public class ChanceConstrainedAlgo {
                     if (components.size() > 1) {
                         connectivityViolation = true;
 
-                        // 找出中心所在的连通组件
+                        // Find the component containing the center
                         int centerComponentIndex = -1;
                         for (int c = 0; c < components.size(); c++) {
                             if (components.get(c).contains(centers.get(j).getId())) {
@@ -387,12 +415,12 @@ public class ChanceConstrainedAlgo {
                             }
                         }
 
-                        // 为每个不包含中心的连通组件添加连通性约束
+                        // Add connectivity constraints for components not containing the center
                         for (int c = 0; c < components.size(); c++) {
                             if (c != centerComponentIndex) {
                                 ArrayList<Integer> component = components.get(c);
 
-                                // 找出该组件的邻居
+                                // Find component neighbors
                                 HashSet<Integer> neighbors = new HashSet<>();
                                 for (int node : component) {
                                     for (int neighbor : inst.getAreas()[node].getNeighbors()) {
@@ -402,15 +430,15 @@ public class ChanceConstrainedAlgo {
                                     }
                                 }
 
-                                // 添加连通性约束
+                                // Add connectivity constraint
                                 GRBLinExpr expr = new GRBLinExpr();
 
-                                // 对所有的邻居节点
+                                // For all neighbor nodes
                                 for (int neighbor : neighbors) {
                                     expr.addTerm(1.0, x[neighbor][j]);
                                 }
 
-                                // 对当前组件中的所有节点
+                                // For all nodes in this component
                                 for (int node : component) {
                                     expr.addTerm(-1.0, x[node][j]);
                                 }
@@ -423,37 +451,42 @@ public class ChanceConstrainedAlgo {
                     }
                 }
 
-                // 如果没有连通性违反，退出循环
+                // If no connectivity violations, exit the loop
                 if (!connectivityViolation) {
                     break;
                 }
 
-                System.out.println("添加了 " + constraintCounter + " 个连通性约束，继续迭代...");
+                // Update the solver time limit for the next iteration
+                remainingTimeMs = TIME_LIMIT_MS - (System.currentTimeMillis() - startTime);
+                remainingTimeSec = Math.max(1.0, remainingTimeMs / 1000.0);
+                model.set(GRB.DoubleParam.TimeLimit, remainingTimeSec);
+
+                System.out.println("Added " + constraintCounter + " connectivity constraints, continuing iteration...");
             }
 
             if (connectivityViolation) {
-                System.out.println("警告：在最大迭代次数内未能保证所有区域的连通性");
+                System.out.println("Warning: Couldn't ensure connectivity within max iterations");
                 model.dispose();
                 env.dispose();
                 return false;
             }
 
-            // 连通性约束满足，结果有效
+            // Connectivity constraints satisfied, result is valid
             feasible = true;
 
-            // 更新区域中心
+            // Update district centers
             ArrayList<Area> newCenters = findTrueCenters();
 
-            // 如果中心发生变化，需要重新求解
+            // If centers changed, resolve
             if (!compareCenters(centers, newCenters)) {
                 centers = newCenters;
                 centersChanged = true;
-//                System.out.println("区域中心发生变化，重新求解...");
+                System.out.println("District centers changed, resolving...");
             }
 
-            // 只有当中心不再变化时才保留最终解
+            // Only keep final solution when centers no longer change
             if (!centersChanged) {
-                // 确保zones中包含最终解
+                // Ensure zones contains the final solution
                 for (int j = 0; j < centers.size(); j++) {
                     zones[j] = new ArrayList<>();
                     for (int i = 0; i < inst.getN(); i++) {
@@ -470,72 +503,399 @@ public class ChanceConstrainedAlgo {
 
         return feasible;
     }
+//    private boolean generateInitialSolutionWithExactMethod() throws GRBException {
+//        boolean feasible = false;
+//        boolean centersChanged = true;
+//
+//        while (centersChanged) {
+//            centersChanged = false;
+//
+//            GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
+//
+//// Set logging parameters BEFORE starting the environment
+//            env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+//            env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+//            env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+//            env.set(GRB.IntParam.Seed, 42);
+//// Now start the environment
+//            env.start();
+//
+//            GRBModel model = new GRBModel(env);
+//
+//            // 决策变量 x_ij
+//            GRBVar[][] x = new GRBVar[inst.getN()][centers.size()];
+//            for (int i = 0; i < inst.getN(); i++) {
+//                for (int j = 0; j < centers.size(); j++) {
+//                    x[i][j] = model.addVar(0, 1, 0, GRB.BINARY, "x_" + i + "_" + centers.get(j).getId());
+//                    if (i == centers.get(j).getId()) {
+//                        x[i][j].set(GRB.DoubleAttr.LB, 1);
+//                        x[i][j].set(GRB.DoubleAttr.UB, 1);
+//                    }
+//                }
+//            }
+//
+//            // 场景违反标志 z_omega
+//            GRBVar[] z = new GRBVar[numScenarios];
+//            for (int s = 0; s < numScenarios; s++) {
+//                z[s] = model.addVar(0, 1, 0, GRB.BINARY, "z_" + s);
+//            }
+//
+//            // 约束: 每个基本单元必须且只能属于一个区域
+//            for (int i = 0; i < inst.getN(); i++) {
+//                GRBLinExpr expr = new GRBLinExpr();
+//                for (int j = 0; j < centers.size(); j++) {
+//                    expr.addTerm(1.0, x[i][j]);
+//                }
+//                model.addConstr(expr, GRB.EQUAL, 1.0, "assign_" + i);
+//            }
+//
+//            // 容量上限约束 - 对所有场景
+//            double U = 0; // 区域最大容量上限
+//            double M = 0; // 足够大的数
+//
+//            for (int j = 0; j < centers.size(); j++) {
+//                for (int s = 0; s < numScenarios; s++) {
+//                    GRBLinExpr expr = new GRBLinExpr();
+//                    for (int i = 0; i < inst.getN(); i++) {
+//                        expr.addTerm(scenarioDemands[s][i], x[i][j]);
+//                    }
+//                    U = scenarioDemandUpperBounds[s];
+//                    M = centers.size() * U;
+//                    expr.addTerm(-M, z[s]); // Add with negative coefficient
+//                    model.addConstr(expr, GRB.LESS_EQUAL, U, "capacity_" + j + "_" + s);
+//                }
+//            }
+//
+//            // 场景违反限制
+//            GRBLinExpr violationExpr = new GRBLinExpr();
+//            for (int s = 0; s < numScenarios; s++) {
+//                violationExpr.addTerm(1.0, z[s]);
+//            }
+//            int maxViolations = (int) Math.floor(gamma * numScenarios);
+//            model.addConstr(violationExpr, GRB.LESS_EQUAL, maxViolations, "violations");
+//
+//            // 设置目标函数: 最小化总距离
+//            GRBLinExpr objExpr = new GRBLinExpr();
+//            for (int i = 0; i < inst.getN(); i++) {
+//                for (int j = 0; j < centers.size(); j++) {
+//                    objExpr.addTerm(inst.dist[i][centers.get(j).getId()], x[i][j]);
+//                }
+//            }
+//            model.setObjective(objExpr, GRB.MINIMIZE);
+//
+//            // 添加连通性约束的迭代过程
+//            boolean connectivityViolation = true;
+//            int connectivityIterations = 0;
+//            int maxConnectivityIterations = 1000;
+//            int totalConstraints = 0;
+//
+//            while (connectivityViolation && connectivityIterations < maxConnectivityIterations) {
+//                connectivityIterations++;
+//
+//                // 求解当前模型
+//                model.optimize();
+//
+//                // 检查模型状态
+//                if (model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL &&
+//                        model.get(GRB.IntAttr.Status) != GRB.Status.SUBOPTIMAL) {
+//                    // 模型不可行
+//                    model.dispose();
+//                    env.dispose();
+//                    return false;
+//                }
+//
+//                // 提取当前解
+//                for (int j = 0; j < centers.size(); j++) {
+//                    zones[j] = new ArrayList<>();
+//                    for (int i = 0; i < inst.getN(); i++) {
+//                        if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
+//                            zones[j].add(i);
+//                        }
+//                    }
+//                }
+//
+//                // 检查连通性
+//                connectivityViolation = false;
+//                int constraintCounter = 0;
+//
+//                for (int j = 0; j < centers.size(); j++) {
+//                    ArrayList<ArrayList<Integer>> components = findConnectedComponents(zones[j]);
+//
+//                    if (components.size() > 1) {
+//                        connectivityViolation = true;
+//
+//                        // 找出中心所在的连通组件
+//                        int centerComponentIndex = -1;
+//                        for (int c = 0; c < components.size(); c++) {
+//                            if (components.get(c).contains(centers.get(j).getId())) {
+//                                centerComponentIndex = c;
+//                                break;
+//                            }
+//                        }
+//
+//                        // 为每个不包含中心的连通组件添加连通性约束
+//                        for (int c = 0; c < components.size(); c++) {
+//                            if (c != centerComponentIndex) {
+//                                ArrayList<Integer> component = components.get(c);
+//
+//                                // 找出该组件的邻居
+//                                HashSet<Integer> neighbors = new HashSet<>();
+//                                for (int node : component) {
+//                                    for (int neighbor : inst.getAreas()[node].getNeighbors()) {
+//                                        if (!component.contains(neighbor)) {
+//                                            neighbors.add(neighbor);
+//                                        }
+//                                    }
+//                                }
+//
+//                                // 添加连通性约束
+//                                GRBLinExpr expr = new GRBLinExpr();
+//
+//                                // 对所有的邻居节点
+//                                for (int neighbor : neighbors) {
+//                                    expr.addTerm(1.0, x[neighbor][j]);
+//                                }
+//
+//                                // 对当前组件中的所有节点
+//                                for (int node : component) {
+//                                    expr.addTerm(-1.0, x[node][j]);
+//                                }
+//
+//                                model.addConstr(expr, GRB.GREATER_EQUAL, 1 - component.size(), "connectivity_" + totalConstraints);
+//                                constraintCounter++;
+//                                totalConstraints++;
+//                            }
+//                        }
+//                    }
+//                }
+//
+//                // 如果没有连通性违反，退出循环
+//                if (!connectivityViolation) {
+//                    break;
+//                }
+//
+//                System.out.println("添加了 " + constraintCounter + " 个连通性约束，继续迭代...");
+//            }
+//
+//            if (connectivityViolation) {
+//                System.out.println("警告：在最大迭代次数内未能保证所有区域的连通性");
+//                model.dispose();
+//                env.dispose();
+//                return false;
+//            }
+//
+//            // 连通性约束满足，结果有效
+//            feasible = true;
+//
+//            // 更新区域中心
+//            ArrayList<Area> newCenters = findTrueCenters();
+//
+//            // 如果中心发生变化，需要重新求解
+//            if (!compareCenters(centers, newCenters)) {
+//                centers = newCenters;
+//                centersChanged = true;
+////                System.out.println("区域中心发生变化，重新求解...");
+//            }
+//
+//            // 只有当中心不再变化时才保留最终解
+//            if (!centersChanged) {
+//                // 确保zones中包含最终解
+//                for (int j = 0; j < centers.size(); j++) {
+//                    zones[j] = new ArrayList<>();
+//                    for (int i = 0; i < inst.getN(); i++) {
+//                        if (Math.abs(x[i][j].get(GRB.DoubleAttr.X) - 1.0) < 1e-6) {
+//                            zones[j].add(i);
+//                        }
+//                    }
+//                }
+//            }
+//
+//            model.dispose();
+//            env.dispose();
+//        }
+//
+//        return feasible;
+//    }
 
     // 使用场景生成方法生成初始可行解
     //TODO 这个函数也需要修改，生成可行解之后，需要保留最进一步的进入求解过程的场景，用在最后的改善阶段
+    // Modified method with global time limit of 600 seconds
     private boolean generateInitialSolutionWithScenarioGeneration() throws GRBException {
+        // Record the start time
+        long startTime = System.currentTimeMillis();
+        final long TIME_LIMIT_MS = 600 * 1000; // 600 seconds in milliseconds
 
-        // 创建初始场景子集
-        selectedScenarios.clear(); // 清除之前的场景
-        selectedScenarios.add(rand.nextInt(numScenarios)); // 开始时选择一个随机场景
-// Create the environment
+        // Create initial scenario subset
+        selectedScenarios.clear(); // Clear previous scenarios
+        selectedScenarios.add(rand.nextInt(numScenarios)); // Start with one random scenario
+
+        // Create tabu list to store problematic scenarios
+        HashSet<Integer> tabuScenarios = new HashSet<>();
+
+        // Create the environment
         GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
 
-// Set logging parameters BEFORE starting the environment
+        // Set logging parameters BEFORE starting the environment
         env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
         env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
         env.set(GRB.StringParam.LogFile, "");       // Empty log file path
-
-        env.set(GRB.IntParam.Seed, 42); // 固定种子
+        env.set(GRB.IntParam.Seed, 42);             // Fixed seed
         env.start();
 
         boolean feasible = false;
-        int iterationLimit = 100; // 最大迭代次数
+        int iterationLimit = 100; // Maximum iterations
         int iteration = 0;
+        int previousFeasibleCount = 0;
+        int lastAddedScenario = -1;
 
-        while (!feasible && iteration < iterationLimit) {
-            iteration++;
+        while (!feasible) {
+            // Check if the global time limit has been exceeded
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - startTime > TIME_LIMIT_MS) {
+                System.out.println("Global time limit of 600 seconds exceeded in scenario generation method");
+                env.dispose();
+                return false;
+            }
 
-            // 求解基于当前选定场景的子模型
+
+            // Solve based on current selected scenarios
             GRBModel subModel = createSubModel(env, selectedScenarios);
+
+            // Set time limit to the solver - calculate remaining time
+            long remainingTimeMs = TIME_LIMIT_MS - (System.currentTimeMillis() - startTime);
+            double remainingTimeSec = Math.max(1.0, remainingTimeMs / 1000.0); // Ensure at least 1 second
+            subModel.set(GRB.DoubleParam.TimeLimit, remainingTimeSec);
+
             subModel.optimize();
+
+            // Check if optimization timed out
+            if (subModel.get(GRB.IntAttr.Status) == GRB.Status.TIME_LIMIT) {
+                System.out.println("Optimization timed out");
+
+                // If we just added a scenario, add it to the tabu list
+                if (lastAddedScenario != -1) {
+                    tabuScenarios.add(lastAddedScenario);
+                    selectedScenarios.remove(lastAddedScenario);
+//                    System.out.println("Added scenario " + lastAddedScenario + " to tabu list due to timeout");
+                    lastAddedScenario = -1;
+                }
+
+                // If this happens on the first iteration with just one scenario, we need to try a different one
+                if (selectedScenarios.size() <= 1) {
+                    selectedScenarios.clear();
+                    int newScenario;
+                    do {
+                        newScenario = rand.nextInt(numScenarios);
+                    } while (tabuScenarios.contains(newScenario));
+
+                    selectedScenarios.add(newScenario);
+//                    System.out.println("Restarting with new initial scenario: " + newScenario);
+                }
+
+                subModel.dispose();
+                continue;
+            }
 
             if (subModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
                     subModel.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
 
-                // 提取当前解
+                // Extract current solution
                 extractSolution(subModel);
 
-                // 检查所有场景的可行性
+                // Check feasibility for all scenarios
                 HashSet<Integer> feasibleScenarios = checkFeasibility();
 
-                // 如果有足够比例的场景是可行的，则解是可接受的
+                // Calculate required number of feasible scenarios
                 int requiredFeasibleScenarios = (int) Math.ceil((1 - gamma) * numScenarios);
-                if (feasibleScenarios.size() >= requiredFeasibleScenarios) {
+                int currentFeasibleCount = feasibleScenarios.size();
+
+                // Check if we need to add the last scenario to tabu list (starting from the second iteration)
+                if (iteration > 1 && lastAddedScenario != -1) {
+                    if (currentFeasibleCount < previousFeasibleCount) {
+                        // The last added scenario made things worse, add it to tabu list
+                        tabuScenarios.add(lastAddedScenario);
+                        selectedScenarios.remove(lastAddedScenario);
+//                        System.out.println("Added scenario " + lastAddedScenario + " to tabu list");
+
+                        // Re-solve with the updated scenario set (without the tabu scenario)
+                        subModel.dispose();
+
+                        // Check time limit again before re-solving
+                        if (System.currentTimeMillis() - startTime > TIME_LIMIT_MS) {
+                            System.out.println("Global time limit exceeded before re-solving");
+                            env.dispose();
+                            return false;
+                        }
+
+                        subModel = createSubModel(env, selectedScenarios);
+
+                        // Recalculate remaining time for solver
+                        remainingTimeMs = TIME_LIMIT_MS - (System.currentTimeMillis() - startTime);
+                        remainingTimeSec = Math.max(1.0, remainingTimeMs / 1000.0);
+                        subModel.set(GRB.DoubleParam.TimeLimit, remainingTimeSec);
+
+                        subModel.optimize();
+
+                        if (subModel.get(GRB.IntAttr.Status) == GRB.Status.TIME_LIMIT) {
+                            System.out.println("Optimization timed out after removing problematic scenario");
+                            subModel.dispose();
+                            continue;
+                        }
+
+                        if (subModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
+                                subModel.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
+                            extractSolution(subModel);
+                            feasibleScenarios = checkFeasibility();
+                            currentFeasibleCount = feasibleScenarios.size();
+                        }
+                    }
+                }
+
+                // Update previousFeasibleCount for next iteration
+                previousFeasibleCount = currentFeasibleCount;
+
+                if (currentFeasibleCount >= requiredFeasibleScenarios) {
+                    // Solution is acceptable
                     feasible = true;
-                    // 已经找到可行解，无需修改selectedScenarios
-                    // 保持现有的selectedScenarios即可
                 } else {
-                    // 添加一些当前不可行的场景到子模型中
+                    // Need to add more scenarios
+
+                    // Get all infeasible scenarios
                     List<Integer> infeasibleScenarios = new ArrayList<>();
                     for (int s = 0; s < numScenarios; s++) {
-                        if (!feasibleScenarios.contains(s)) {
+                        if (!feasibleScenarios.contains(s) && !selectedScenarios.contains(s) && !tabuScenarios.contains(s)) {
                             infeasibleScenarios.add(s);
                         }
                     }
 
-                    // 随机选择一些不可行场景加入
-                    int numToAdd = Math.min(2, infeasibleScenarios.size()); // 每次添加2个或更少
-                    for (int i = 0; i < numToAdd && !infeasibleScenarios.isEmpty(); i++) {
-                        int idx = rand.nextInt(infeasibleScenarios.size()); // 使用类的全局rand
-                        selectedScenarios.add(infeasibleScenarios.get(idx));
-                        infeasibleScenarios.remove(idx);
+                    // Check if we have any non-tabu scenarios to add
+                    if (infeasibleScenarios.isEmpty()) {
+                        System.out.println("No valid scenarios left to add - all scenarios are either selected or tabu");
+                        subModel.dispose();
+                        feasible = false;
+                        break;
                     }
+
+                    // Randomly select ONE scenario to add
+                    int idx = rand.nextInt(infeasibleScenarios.size());
+                    lastAddedScenario = infeasibleScenarios.get(idx);
+                    selectedScenarios.add(lastAddedScenario);
+//                    System.out.println("Added scenario " + lastAddedScenario);
                 }
             } else {
-                // 子模型不可行，尝试不同的场景组合
+                // Sub-model is infeasible, try a different combination
+                System.out.println("Sub-model infeasible, resetting selection");
                 selectedScenarios.clear();
-                selectedScenarios.add(rand.nextInt(numScenarios)); // 使用类的全局rand
+
+                // Choose a random scenario that's not in the tabu list
+                int newScenario;
+                do {
+                    newScenario = rand.nextInt(numScenarios);
+                } while (tabuScenarios.contains(newScenario));
+
+                selectedScenarios.add(newScenario);
+                lastAddedScenario = -1;
+                previousFeasibleCount = 0;
             }
 
             subModel.dispose();
@@ -544,6 +904,173 @@ public class ChanceConstrainedAlgo {
         env.dispose();
         return feasible;
     }
+
+
+// Modified method with tabu list for problematic scenarios
+    // Modified method with tabu list for problematic scenarios and timeout handling
+//    private boolean generateInitialSolutionWithScenarioGeneration() throws GRBException {
+//        // Create initial scenario subset
+//        selectedScenarios.clear(); // Clear previous scenarios
+//        selectedScenarios.add(rand.nextInt(numScenarios)); // Start with one random scenario
+//
+//        // Create tabu list to store problematic scenarios
+//        HashSet<Integer> tabuScenarios = new HashSet<>();
+//
+//        // Create the environment
+//        GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
+//
+//        // Set logging parameters BEFORE starting the environment
+//        env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+//        env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+//        env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+//        env.set(GRB.IntParam.Seed, 42);             // Fixed seed
+//        env.start();
+//
+//        boolean feasible = false;
+//        int iterationLimit = numScenarios/2; // Maximum iterations
+//        int iteration = 0;
+//        int previousFeasibleCount = 0;
+//        int lastAddedScenario = -1;
+//
+//        while (!feasible && iteration < iterationLimit) {
+//            iteration++;
+//            System.out.println("Iteration " + iteration + ": Selected scenarios: " + selectedScenarios.size());
+//
+//            // Solve based on current selected scenarios
+//            GRBModel subModel = createSubModel(env, selectedScenarios);
+//
+//            // Set time limit to 600 seconds
+//            subModel.set(GRB.DoubleParam.TimeLimit, 300.0);
+//
+//            subModel.optimize();
+//
+//            // Check if optimization timed out
+//            if (subModel.get(GRB.IntAttr.Status) == GRB.Status.TIME_LIMIT) {
+//                System.out.println("Optimization timed out after 300 seconds");
+//
+//                // If we just added a scenario, add it to the tabu list
+//                if (lastAddedScenario != -1) {
+//                    tabuScenarios.add(lastAddedScenario);
+//                    selectedScenarios.remove(lastAddedScenario);
+//                    System.out.println("Added scenario " + lastAddedScenario + " to tabu list due to timeout");
+//                    lastAddedScenario = -1;
+//                }
+//
+//                // If this happens on the first iteration with just one scenario, we need to try a different one
+//                if (selectedScenarios.size() <= 1) {
+//                    selectedScenarios.clear();
+//                    int newScenario;
+//                    do {
+//                        newScenario = rand.nextInt(numScenarios);
+//                    } while (tabuScenarios.contains(newScenario));
+//
+//                    selectedScenarios.add(newScenario);
+//                    System.out.println("Restarting with new initial scenario: " + newScenario);
+//                }
+//
+//                subModel.dispose();
+//                continue;
+//            }
+//
+//            if (subModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
+//                    subModel.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
+//
+//                // Extract current solution
+//                extractSolution(subModel);
+//
+//                // Check feasibility for all scenarios
+//                HashSet<Integer> feasibleScenarios = checkFeasibility();
+//
+//                // Calculate required number of feasible scenarios
+//                int requiredFeasibleScenarios = (int) Math.ceil((1 - gamma) * numScenarios);
+//                int currentFeasibleCount = feasibleScenarios.size();
+//                System.out.println("Current feasible scenarios: " + currentFeasibleCount);
+//                System.out.println("Required feasible scenarios: " + requiredFeasibleScenarios);
+//
+//                // Check if we need to add the last scenario to tabu list (starting from the second iteration)
+//                if (iteration > 1 && lastAddedScenario != -1) {
+//                    if (currentFeasibleCount < previousFeasibleCount) {
+//                        // The last added scenario made things worse, add it to tabu list
+//                        tabuScenarios.add(lastAddedScenario);
+//                        selectedScenarios.remove(lastAddedScenario);
+//                        System.out.println("Added scenario " + lastAddedScenario + " to tabu list");
+//
+//                        // Re-solve with the updated scenario set (without the tabu scenario)
+//                        subModel.dispose();
+//                        subModel = createSubModel(env, selectedScenarios);
+//                        subModel.set(GRB.DoubleParam.TimeLimit, 300.0);
+//                        subModel.optimize();
+//
+//                        if (subModel.get(GRB.IntAttr.Status) == GRB.Status.TIME_LIMIT) {
+//                            System.out.println("Optimization timed out after removing problematic scenario");
+//                            subModel.dispose();
+//                            continue;
+//                        }
+//
+//                        if (subModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL ||
+//                                subModel.get(GRB.IntAttr.Status) == GRB.Status.SUBOPTIMAL) {
+//                            extractSolution(subModel);
+//                            feasibleScenarios = checkFeasibility();
+//                            currentFeasibleCount = feasibleScenarios.size();
+//                        }
+//                    }
+//                }
+//
+//                // Update previousFeasibleCount for next iteration
+//                previousFeasibleCount = currentFeasibleCount;
+//
+//                if (currentFeasibleCount >= requiredFeasibleScenarios) {
+//                    // Solution is acceptable
+//                    feasible = true;
+//                } else {
+//                    // Need to add more scenarios
+//
+//                    // Get all infeasible scenarios
+//                    List<Integer> infeasibleScenarios = new ArrayList<>();
+//                    for (int s = 0; s < numScenarios; s++) {
+//                        if (!feasibleScenarios.contains(s) && !selectedScenarios.contains(s) && !tabuScenarios.contains(s)) {
+//                            infeasibleScenarios.add(s);
+//                        }
+//                    }
+//
+//                    // Check if we have any non-tabu scenarios to add
+//                    if (infeasibleScenarios.isEmpty()) {
+//                        System.out.println("No valid scenarios left to add - all scenarios are either selected or tabu");
+//                        subModel.dispose();
+//                        feasible = false;
+//                        break;
+//                    }
+//
+//                    // Randomly select ONE scenario to add
+//                    int numToAdd = 1; // Add exactly 1 scenario at a time
+//
+//                    int idx = rand.nextInt(infeasibleScenarios.size());
+//                    lastAddedScenario = infeasibleScenarios.get(idx);
+//                    selectedScenarios.add(lastAddedScenario);
+//                    System.out.println("Added scenario " + lastAddedScenario);
+//                }
+//            } else {
+//                // Sub-model is infeasible, try a different combination
+//                System.out.println("Sub-model infeasible, resetting selection");
+//                selectedScenarios.clear();
+//
+//                // Choose a random scenario that's not in the tabu list
+//                int newScenario;
+//                do {
+//                    newScenario = rand.nextInt(numScenarios);
+//                } while (tabuScenarios.contains(newScenario));
+//
+//                selectedScenarios.add(newScenario);
+//                lastAddedScenario = -1;
+//                previousFeasibleCount = 0;
+//            }
+//
+//            subModel.dispose();
+//        }
+//
+//        env.dispose();
+//        return feasible;
+//    }
 
     // 创建基于选定场景的子模型
     private GRBModel createSubModel(GRBEnv env, HashSet<Integer> selectedScenarios) throws GRBException {
