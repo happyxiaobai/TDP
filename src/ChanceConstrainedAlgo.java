@@ -266,12 +266,16 @@ public class ChanceConstrainedAlgo {
         while (centersChanged) {
             centersChanged = false;
 
-            // 创建环境和模型
-            GRBEnv env = new GRBEnv();
-            env.set(GRB.IntParam.OutputFlag,0);
-            env.set(GRB.IntParam.LogToConsole, 0);
+            GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
+
+// Set logging parameters BEFORE starting the environment
+            env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+            env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+            env.set(GRB.StringParam.LogFile, "");       // Empty log file path
             env.set(GRB.IntParam.Seed, 42);
+// Now start the environment
             env.start();
+
             GRBModel model = new GRBModel(env);
 
             // 决策变量 x_ij
@@ -311,10 +315,10 @@ public class ChanceConstrainedAlgo {
                     for (int i = 0; i < inst.getN(); i++) {
                         expr.addTerm(scenarioDemands[s][i], x[i][j]);
                     }
-                    expr.addTerm(M, z[s]);
                     U = scenarioDemandUpperBounds[s];
                     M = centers.size() * U;
-                    model.addConstr(expr, GRB.LESS_EQUAL, U + M, "capacity_" + j + "_" + s);
+                    expr.addTerm(-M, z[s]); // Add with negative coefficient
+                    model.addConstr(expr, GRB.LESS_EQUAL, U, "capacity_" + j + "_" + s);
                 }
             }
 
@@ -476,11 +480,14 @@ public class ChanceConstrainedAlgo {
         // 创建初始场景子集
         selectedScenarios.clear(); // 清除之前的场景
         selectedScenarios.add(rand.nextInt(numScenarios)); // 开始时选择一个随机场景
+// Create the environment
+        GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
 
-        GRBEnv env = new GRBEnv();
-        env.set(GRB.IntParam.OutputFlag,0);
-        env.set(GRB.IntParam.LogToConsole, 0);
-        // 设置Gurobi的随机种子参数，确保求解过程确定性
+// Set logging parameters BEFORE starting the environment
+        env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+        env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+        env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+
         env.set(GRB.IntParam.Seed, 42); // 固定种子
         env.start();
 
@@ -687,11 +694,16 @@ public class ChanceConstrainedAlgo {
         boolean allConnected = false;
         int iteration = 0;
         int maxIterations = 1000; // 限制迭代次数
+// Create the environment
+        GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
 
-        // 创建一个模型，并在整个过程中保持它不被销毁
-        GRBEnv env = new GRBEnv();
-        env.set(GRB.IntParam.OutputFlag,0);
-        env.set(GRB.IntParam.LogToConsole, 0);
+// Set logging parameters BEFORE starting the environment
+        env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+        env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+        env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+
+// Now start the environment
+
         env.set(GRB.IntParam.Seed, 42);
         env.start();
 
@@ -845,7 +857,7 @@ public class ChanceConstrainedAlgo {
                 break;
             }
 
-            System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
+//            System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
         }
         model.optimize();
 

@@ -7,114 +7,107 @@ import java.util.Random;
 
 public class CCTest1 {
     public static void main(String[] args) throws Exception {
-        // 实验配置
-        double E = 50.0; // 期望值
-        double[] RSDValues = {0.125, 0.25, 0.5}; // 相对标准差数组
-        double[] rValues = {0.1, 0.2, 0.3}; // 容差参数取值
-        double[] gammaValues = {0.7, 0.8, 0.9}; // 机会约束风险参数
-        int[] scenarioNumValues = {500, 1000, 5000}; // 场景数量
-        long seed = 12345678; // 随机种子
+        // Experiment configuration
+        double E = 50.0; // Expected value
+        double[] RSDValues = {0.125, 0.25, 0.5}; // Relative standard deviation array
+        double[] rValues = {0.1, 0.2, 0.3}; // Tolerance parameter values
+        double[] gammaValues = {0.7, 0.8, 0.9}; // Chance constraint risk parameter
+        int[] scenarioNumValues = {500, 1000, 5000}; // Number of scenarios
+        boolean[] useScenarioGeneration = {true, false}; // Whether to use scenario generation
+        long seed = 12345678; // Random seed
 
         long testSeed = seed + 1000;
         int numTestScenarios = 1000;
 
-
-
-        // 输出结果的CSV文件
+        // Output CSV file
         String outputCSVPath = "./output/chance_constrained_results.csv";
 
-        // 准备CSV文件
+        // Prepare CSV file
         try (BufferedWriter csvWriter = new BufferedWriter(new FileWriter(outputCSVPath))) {
-            // Write CSV header
-            csvWriter.write("Instance,RSD,r,gamma,Scenarios,Runtime(s),Objective,OutOfSamplePerformance");
+            // Write CSV header with added UseScenarioGeneration column
+            csvWriter.write("Instance,RSD,r,gamma,Scenarios,UseScenarioGeneration,Runtime(s),Objective,OutOfSamplePerformance");
             csvWriter.newLine();
 
-            // 获取instances目录下的所有.dat文件
+            // Get all .dat files in instances directory
             File dir = new File("./Instances");
             File[] instanceFiles = dir.listFiles((d, name) -> name.endsWith(".dat"));
 
-            // 如果没有找到实例文件，给出提示
+            // If no instance files are found, provide a hint
             if (instanceFiles == null || instanceFiles.length == 0) {
                 System.out.println("No .dat files found in ./instances directory.");
                 return;
             }
 
-            // 遍历所有实例文件
+            // Iterate through all instance files
             for (File instanceFile : instanceFiles) {
                 String instanceName = instanceFile.getName();
 
-                // 遍历所有参数组合
+                // Iterate through all parameter combinations
                 for (double RSD : RSDValues) {
                     for (double r : rValues) {
                         for (double gamma : gammaValues) {
                             for (int numScenarios : scenarioNumValues) {
-                                // 打印当前实验信息
-                                System.out.println("Running experiment:");
-                                System.out.println("Instance: " + instanceName);
-                                System.out.println("RSD: " + RSD);
-                                System.out.println("r: " + r);
-                                System.out.println("gamma: " + gamma);
-                                System.out.println("Scenarios: " + numScenarios);
+                                for (boolean useScenario : useScenarioGeneration) {
+                                    // Print current experiment information
+                                    System.out.println("Running experiment:");
+                                    System.out.println("Instance: " + instanceName);
+                                    System.out.println("RSD: " + RSD);
+                                    System.out.println("r: " + r);
+                                    System.out.println("gamma: " + gamma);
+                                    System.out.println("Scenarios: " + numScenarios);
+                                    System.out.println("Use Scenario Generation: " + useScenario);
 
-                                // 生成随机场景
-                                Instance instance = new Instance(instanceFile.getPath());
-                                double[][] scenarios = generateScenarios(
-                                        instance.getN(), numScenarios, E, RSD, seed
-                                );
+                                    // Generate random scenarios
+                                    Instance instance = new Instance(instanceFile.getPath());
+                                    double[][] scenarios = generateScenarios(
+                                            instance.getN(), numScenarios, E, RSD, seed
+                                    );
 
-                                // 记录开始时间
-                                long startTime = System.currentTimeMillis();
+                                    // Record start time
+                                    long startTime = System.currentTimeMillis();
 
-                                // 创建算法实例 - 注意：需要修改ChanceConstrainedAlgo构造函数以支持r参数
-                                ChanceConstrainedAlgo algo = new ChanceConstrainedAlgo(
-                                        instance, scenarios, gamma, seed, r
-                                );
+                                    // Create algorithm instance - Note: need to modify ChanceConstrainedAlgo constructor to support r parameter
+                                    ChanceConstrainedAlgo algo = new ChanceConstrainedAlgo(
+                                            instance, scenarios, gamma, seed, r
+                                    );
 
-                                // 运行算法
-                                String outputFileName = String.format(
-                                        "CC_%s_RSD%.3f_r%.1f_gamma%.1f_scen%d",
-                                        instanceName.replace(".dat", ""),
-                                        RSD, r, gamma, numScenarios
-                                );
+                                    // Run algorithm
+                                    String outputFileName = String.format(
+                                            "CC_%s_RSD%.3f_r%.1f_gamma%.1f_scen%d_scenario%s",
+                                            instanceName.replace(".dat", ""),
+                                            RSD, r, gamma, numScenarios, useScenario ? "true" : "false"
+                                    );
 
-                                // 运行算法并获取目标函数值
-                                double objectiveValue = 0;
-                                try {
-                                    objectiveValue = algo.run(outputFileName, true);
-                                } catch (Exception e) {
-                                    System.err.println("Error running experiment: " + e.getMessage());
-                                    continue;
+                                    // Run algorithm and get objective value
+                                    double objectiveValue = 0;
+                                    try {
+                                        // Pass the useScenario parameter to control scenario generation
+                                        objectiveValue = algo.run(outputFileName, useScenario);
+                                    } catch (Exception e) {
+                                        System.err.println("Error running experiment: " + e.getMessage());
+                                        continue;
+                                    }
+
+                                    // Calculate runtime
+                                    long endTime = System.currentTimeMillis();
+                                    double runtime = (endTime - startTime) / 1000.0;
+
+                                    // Test out-of-sample performance
+                                    double outOfSamplePerformance = testOutOfSamplePerformance(
+                                            instance, algo, E, RSD, testSeed, r, numScenarios);
+
+                                    // Write to CSV file with the added useScenario field
+                                    csvWriter.write(String.format(
+                                            "%s,%.3f,%.1f,%.1f,%d,%s,%.3f,%.4f,%.4f",
+                                            instanceName, RSD, r, gamma, numScenarios,
+                                            useScenario ? "true" : "false",
+                                            runtime, objectiveValue, outOfSamplePerformance
+                                    ));
+                                    csvWriter.newLine();
+
+                                    // Flush to ensure real-time writing
+                                    csvWriter.flush();
                                 }
-
-                                // 计算运行时间
-                                long endTime = System.currentTimeMillis();
-                                double runtime = (endTime - startTime) / 1000.0;
-
-
-                                // Test out-of-sample performance
-                                double outOfSamplePerformance = testOutOfSamplePerformance(
-                                        instance, algo, E, RSD, testSeed, r, numScenarios);
-
-                                // Write to CSV file
-                                csvWriter.write(String.format(
-                                        "%s,%.3f,%.1f,%.1f,%d,%.3f,%.4f,%.4f",
-                                        instanceName, RSD, r, gamma, numScenarios,
-                                        runtime, objectiveValue, outOfSamplePerformance
-                                ));
-                                csvWriter.newLine();
-
-
-                                // 刷新以确保实时写入
-                                csvWriter.flush();
-//
-//                                // 可视化
-//                                String outputImagePath = String.format(
-//                                        "./output/%s_visualization.png", outputFileName
-//                                );
-//                                DistrictVisualizer visualizer = new DistrictVisualizer(
-//                                        instance, algo.getZones(), algo.getCenters()
-//                                );
-//                                visualizer.saveVisualization(outputImagePath);
                             }
                         }
                     }
@@ -124,7 +117,7 @@ public class CCTest1 {
             System.err.println("Error writing results to CSV: " + e.getMessage());
         }
 
-        System.out.println("实验完成，结果已保存到 " + outputCSVPath);
+        System.out.println("Experiment completed, results saved to " + outputCSVPath);
     }
 
     // 生成随机场景 - 使用均匀分布

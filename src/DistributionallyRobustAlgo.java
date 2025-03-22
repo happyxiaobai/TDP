@@ -418,9 +418,15 @@ public class DistributionallyRobustAlgo {
      * 生成初始可行解
      */
     private boolean generateInitialSolution() throws GRBException {
-        GRBEnv env = new GRBEnv();
-        env.set(GRB.IntParam.LogToConsole, 0);
+        GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
+
+// Set logging parameters BEFORE starting the environment
+        env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+        env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+        env.set(GRB.StringParam.LogFile, "");       // Empty log file path
         env.set(GRB.IntParam.Seed, 42);
+// Now start the environment
+        env.start();
         GRBModel model = new GRBModel(env);
 //        model.set(GRB.IntParam.NonConvex, 2);
         // 减少预处理步骤
@@ -670,9 +676,15 @@ public class DistributionallyRobustAlgo {
         int maxIterations = 1000; // 限制迭代次数
 
         // 创建环境和模型
-        GRBEnv env = new GRBEnv();
-        env.set(GRB.IntParam.LogToConsole, 0);
+        GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
+
+// Set logging parameters BEFORE starting the environment
+        env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+        env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+        env.set(GRB.StringParam.LogFile, "");       // Empty log file path
         env.set(GRB.IntParam.Seed, 42);
+// Now start the environment
+        env.start();
         GRBModel model = new GRBModel(env);
         model.set(GRB.IntParam.NonConvex, 2);
 

@@ -101,13 +101,17 @@ public class Algo {
             while (change) {
                 change = false;
 
-                GRBEnv env = new GRBEnv();
-                env.start();
-                env.set(GRB.IntParam.LogToConsole, 0);
-                env.set(GRB.IntParam.OutputFlag, 0); // 关闭标准输出
-                env.set(GRB.StringParam.LogFile, "fileName.log"); // 设置日志文件名
+                GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
 
-                 // 禁用控制台输出
+// Set logging parameters BEFORE starting the environment
+                env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+                env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+                env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+                env.set(GRB.IntParam.Seed, 42);
+// Now start the environment
+                env.start();
+
+                // 禁用控制台输出
 
 
                 GRBModel model = new GRBModel(env);
@@ -169,7 +173,6 @@ public class Algo {
                 cur_value = objVal;
 
 
-
 //                if (model.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL) {
 //                    double objVal = model.get(GRB.DoubleAttr.ObjVal);
 //                    cur_value = objVal;
@@ -189,8 +192,6 @@ public class Algo {
                     }
                     zones[i] = beatList;
                 }
-
-
 
 
                 for (int z = 0; z < zones.length; z++) {
@@ -240,12 +241,17 @@ public class Algo {
             if (cur_value < Best) {
                 boolean vio = true;
                 //新建一个模型
-                GRBEnv env = new GRBEnv();
-                env.set(GRB.IntParam.LogToConsole, 0);
-                env.set(GRB.IntParam.OutputFlag, 0); // 关闭标准输出
-                env.set(GRB.StringParam.LogFile, "fileName.log"); // 设置日志文件名
+                GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
 
-                 // 禁用控制台输出
+// Set logging parameters BEFORE starting the environment
+                env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+                env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+                env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+                env.set(GRB.IntParam.Seed, 42);
+// Now start the environment
+                env.start();
+
+                // 禁用控制台输出
 
                 GRBModel model = new GRBModel(env);
                 model.set(GRB.IntParam.OutputFlag, 0); // 关闭标准输出
@@ -380,8 +386,6 @@ public class Algo {
             }
 
 
-
-
             iter = iter + 1;
             System.out.println("第" + iter + "次迭代最好结果为" + Best);
             if (alpha < beta)
@@ -423,10 +427,11 @@ public class Algo {
 
     /**
      * 返回解决方案中的区域中心列表，不写入文件
+     *
      * @return 区域中心ID列表
      */
 
-    public ArrayList<Integer> getCorrectSolutionCenters() throws GRBException,IOException{
+    public ArrayList<Integer> getCorrectSolutionCenters() throws GRBException, IOException {
         long startTime = System.currentTimeMillis(); // 获取开始时间
         double beta = 0.4;
         double Best = Double.MAX_VALUE;
@@ -495,12 +500,14 @@ public class Algo {
             while (change) {
                 change = false;
 
-                GRBEnv env = new GRBEnv();
-                env.set(GRB.IntParam.OutputFlag,0);
+                GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
 
-                env.set(GRB.IntParam.LogToConsole, 0);
-                env.set(GRB.IntParam.OutputFlag, 0); // 关闭标准输出
-                env.set(GRB.StringParam.LogFile, "fileName.log"); // 设置日志文件名
+// Set logging parameters BEFORE starting the environment
+                env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+                env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+                env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+                env.set(GRB.IntParam.Seed, 42);
+// Now start the environment
                 env.start();
 
                 GRBModel model = new GRBModel(env);
@@ -605,10 +612,17 @@ public class Algo {
             if (cur_value < Best) {
                 boolean vio = true;
                 //新建一个模型
-                GRBEnv env = new GRBEnv();
-                env.set(GRB.IntParam.LogToConsole, 0);
-                env.set(GRB.IntParam.OutputFlag, 0); // 关闭标准输出
-                env.set(GRB.StringParam.LogFile, "fileName.log"); // 设置日志文件名
+                // Create the environment
+                GRBEnv env = new GRBEnv(true);  // Create the env with manual start mode
+
+// Set logging parameters BEFORE starting the environment
+                env.set(GRB.IntParam.OutputFlag, 0);        // Suppress all output
+                env.set(GRB.IntParam.LogToConsole, 0);      // Disable console logging
+                env.set(GRB.StringParam.LogFile, "");       // Empty log file path
+                env.set(GRB.IntParam.Seed, 42);
+// Now start the environment
+                env.start();
+
 
                 // 禁用控制台输出
 
@@ -637,8 +651,6 @@ public class Algo {
                     }
                     model.addConstr(expr, GRB.EQUAL, 1.0, "c1_" + j);
                 }
-
-
 
 
                 for (int i = 0; i < centers.size(); i++) {
@@ -717,8 +729,7 @@ public class Algo {
                                 BestZones[z] = new ArrayList<>();
                                 BestZones[z].addAll(zones[z]);
                             }
-                            for(int kk =0;kk<centers.size();kk++)
-                            {
+                            for (int kk = 0; kk < centers.size(); kk++) {
                                 bestCenters.add(centers.get(kk).getId());
                             }
                         }
