@@ -1,4 +1,6 @@
 classdef DistributionallyRobustAlgo < handle
+    % This class implements a distributionally robust optimization approach
+    % for solving the area division problem with uncertain demands
     properties
         inst                    % Instance object
         centers                 % List of center areas
@@ -44,7 +46,7 @@ classdef DistributionallyRobustAlgo < handle
             obj.delta2 = delta2;
             obj.useJointChance = useJointChance;
             
-            % Calculate moment information
+            % Calculate moment information (mean and covariance)
             obj.calculateMomentInformation();
             
             % Calculate demand upper bound
@@ -122,8 +124,10 @@ classdef DistributionallyRobustAlgo < handle
             obj.centers = [];
             for i = 1:length(initialCenters)
                 centerId = initialCenters(i);
-                obj.centers = [obj.centers, obj.inst.getAreas(){centerId+1}];
-                obj.inst.getAreas(){centerId+1}.setCenter(true);
+                areas = obj.inst.getAreas();
+                area = areas{centerId};
+                obj.centers = [obj.centers, area]; % 添加到centers列表
+                area.setCenter(true);
             end
             
             % Step 2: Generate initial feasible solution
@@ -250,7 +254,7 @@ classdef DistributionallyRobustAlgo < handle
             
             % Fill with random centers if needed
             while length(candidateCenters) < obj.inst.k
-                randomCenter = randi(obj.inst.getN()) - 1;
+                randomCenter = randi(obj.inst.getN()) - 1; % Generate 0-based ID
                 if ~ismember(randomCenter, candidateCenters)
                     candidateCenters = [candidateCenters, randomCenter];
                 end
@@ -278,7 +282,7 @@ classdef DistributionallyRobustAlgo < handle
                 if length(scenarioCenters) < obj.inst.k
                     centerSet = scenarioCenters;
                     while length(centerSet) < obj.inst.k
-                        candidate = randi(obj.inst.getN()) - 1;
+                        candidate = randi(obj.inst.getN()) - 1; % Generate 0-based ID
                         if ~ismember(candidate, centerSet)
                             centerSet = [centerSet, candidate];
                             scenarioCenters = [scenarioCenters, candidate];
@@ -297,7 +301,7 @@ classdef DistributionallyRobustAlgo < handle
                 centerSet = [];
                 
                 while length(centerSet) < obj.inst.k
-                    candidate = randi(obj.inst.getN()) - 1;
+                    candidate = randi(obj.inst.getN()) - 1; % Generate 0-based ID
                     if ~ismember(candidate, centerSet)
                         centerSet = [centerSet, candidate];
                         fallbackCenters = [fallbackCenters, candidate];
@@ -336,7 +340,7 @@ classdef DistributionallyRobustAlgo < handle
                 % Centers must be assigned to their own districts
                 for j = 1:p
                     centerId = obj.centers(j).getId();
-                    constraints = [constraints, x(centerId+1, j) == 1];
+                    constraints = [constraints, x(centerId, j) == 1]; % ID is already 1-based
                 end
                 
                 % Add distributionally robust chance constraints
@@ -395,7 +399,7 @@ classdef DistributionallyRobustAlgo < handle
                 objective = 0;
                 for i = 1:n
                     for j = 1:p
-                        objective = objective + obj.inst.dist(i, obj.centers(j).getId()+1) * x(i, j);
+                        objective = objective + obj.inst.dist(i, obj.centers(j).getId()) * x(i, j); % ID is already 1-based
                     end
                 end
                 
@@ -414,7 +418,7 @@ classdef DistributionallyRobustAlgo < handle
                         obj.zones{j} = [];
                         for i = 1:n
                             if abs(x_val(i, j) - 1) < 1e-6
-                                obj.zones{j} = [obj.zones{j}, i-1];
+                                obj.zones{j} = [obj.zones{j}, obj.inst.getAreas{i}.getId()]; % ID is already 1-based
                             end
                         end
                     end
@@ -453,7 +457,7 @@ classdef DistributionallyRobustAlgo < handle
                     for k = 1:length(obj.zones{j})
                         otherNodeId = obj.zones{j}(k);
                         if nodeId ~= otherNodeId
-                            totalDist = totalDist + obj.inst.dist(nodeId+1, otherNodeId+1);
+                            totalDist = totalDist + obj.inst.dist(nodeId, otherNodeId); % IDs are already 1-based
                         end
                     end
                     
@@ -463,7 +467,7 @@ classdef DistributionallyRobustAlgo < handle
                     end
                 end
                 
-                newCenters = [newCenters, obj.inst.getAreas(){bestCenter+1}];
+                newCenters = [newCenters, obj.inst.getAreas(){bestCenter}]; % ID is already 1-based
             end
         end
         
@@ -508,17 +512,17 @@ classdef DistributionallyRobustAlgo < handle
             % Centers must be assigned to their own districts
             for j = 1:p
                 centerId = obj.centers(j).getId();
-                constraints = [constraints, x(centerId+1, j) == 1];
+                constraints = [constraints, x(centerId+1, j) == 1]; % Adjust for 1-based indexing
             end
             
             % Add distributionally robust chance constraints (same as in generateInitialSolution)
-            % ...
+            % [Add DRCC constraints as needed]
             
             % Objective function
             objective = 0;
             for i = 1:n
                 for j = 1:p
-                    objective = objective + obj.inst.dist(i, obj.centers(j).getId()+1) * x(i, j);
+                    objective = objective + obj.inst.dist(i, obj.centers(j).getId()+1) * x(i, j); % Adjust for 1-based indexing
                 end
             end
             
@@ -540,7 +544,7 @@ classdef DistributionallyRobustAlgo < handle
                         obj.zones{j} = [];
                         for i = 1:n
                             if abs(x_val(i, j) - 1) < 1e-6
-                                obj.zones{j} = [obj.zones{j}, i-1];
+                                obj.zones{j} = [obj.zones{j}, obj.inst.getAreas(){i}.getId()]; % Store original ID in zones
                             end
                         end
                     end
@@ -597,7 +601,7 @@ classdef DistributionallyRobustAlgo < handle
                         neighbors = [];
                         for i = 1:length(component)
                             nodeId = component(i);
-                            node_neighbors = obj.inst.getAreas(){nodeId+1}.getNeighbors();
+                            node_neighbors = obj.inst.getAreas(){nodeId+1}.getNeighbors(); % Adjust for 1-based indexing
                             
                             for n = 1:length(node_neighbors)
                                 if ~ismember(node_neighbors(n), component)
@@ -614,12 +618,12 @@ classdef DistributionallyRobustAlgo < handle
                         
                         % For all neighbor nodes
                         for neighborId = neighbors
-                            constr_expr = constr_expr + x(neighborId+1, districtIndex);
+                            constr_expr = constr_expr + x(neighborId+1, districtIndex); % Adjust for 1-based indexing
                         end
                         
                         % For all nodes in this component
                         for nodeId = component
-                            constr_expr = constr_expr - x(nodeId+1, districtIndex);
+                            constr_expr = constr_expr - x(nodeId+1, districtIndex); % Adjust for 1-based indexing
                         end
                         
                         constraints = [constraints, constr_expr >= 1 - length(component)];
@@ -646,7 +650,7 @@ classdef DistributionallyRobustAlgo < handle
                     obj.zones{j} = [];
                     for i = 1:n
                         if abs(x_val(i, j) - 1) < 1e-6
-                            obj.zones{j} = [obj.zones{j}, i-1];
+                            obj.zones{j} = [obj.zones{j}, obj.inst.getAreas(){i}.getId()]; % Store original ID in zones
                         end
                     end
                 end
@@ -668,22 +672,24 @@ classdef DistributionallyRobustAlgo < handle
             visited = false(1, max(zone) + 1);
             
             for i = 1:length(zone)
-                if ~visited(zone(i) + 1)
+                if ~visited(zone(i))  % ID is already 1-based
                     component = [];
                     queue = zone(i);
-                    visited(zone(i) + 1) = true;
+                    visited(zone(i)) = true;  % ID is already 1-based
                     
                     while ~isempty(queue)
                         current = queue(1);
                         queue(1) = [];
                         component = [component, current];
                         
-                        neighbors = obj.inst.getAreas(){current+1}.getNeighbors();
+                        areas = obj.inst.getAreas();
+                        area = areas{current};
+                        neighbors = area.getNeighbors();
                         for n = 1:length(neighbors)
                             neighbor = neighbors(n);
-                            if ismember(neighbor, zone) && ~visited(neighbor + 1)
+                            if ismember(neighbor, zone) && ~visited(neighbor)  % ID is already 1-based
                                 queue = [queue, neighbor];
-                                visited(neighbor + 1) = true;
+                                visited(neighbor) = true;  % ID is already 1-based
                             end
                         end
                     end
@@ -699,7 +705,7 @@ classdef DistributionallyRobustAlgo < handle
             
             for j = 1:length(obj.centers)
                 for i = obj.zones{j}
-                    objVal = objVal + obj.inst.dist(i+1, obj.centers(j).getId()+1);
+                    objVal = objVal + obj.inst.dist(i, obj.centers(j).getId());  % IDs are already 1-based
                 end
             end
         end
@@ -713,5 +719,12 @@ classdef DistributionallyRobustAlgo < handle
         function c = getCenters(obj)
             c = obj.centers;
         end
-    end
-end
+        
+        % Helper function for returning D1/D2 status
+        function result = conditional(obj, condition, trueValue, falseValue)
+            if condition
+                result = trueValue;
+            else
+                result = falseValue;
+            end
+        end

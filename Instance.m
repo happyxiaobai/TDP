@@ -3,10 +3,9 @@ classdef Instance < handle
         n               % Number of areas
         areas           % Array of Area objects
         edges           % Adjacency matrix
-        average1        % Average of first activeness metric
-        average2        % Average of second activeness metric
         k               % Number of districts to create
         dist            % Distance matrix
+        capacity        % Array of first activeness metric (demand) for all areas
     end
     
     methods
@@ -31,9 +30,10 @@ classdef Instance < handle
             % Initialize areas array
             obj.areas = cell(1, obj.n);
             
+            % Initialize capacity array
+            obj.capacity = zeros(1, obj.n);
+            
             % Read area data
-            sum1 = 0;
-            sum2 = 0;
             for i = 1:obj.n
                 id = fscanf(fileID, '%d', 1);
                 x = fscanf(fileID, '%f', 1);
@@ -44,10 +44,15 @@ classdef Instance < handle
                     activeness(j) = fscanf(fileID, '%f', 1);
                 end
                 
-                sum1 = sum1 + activeness(1);
-                sum2 = sum2 + activeness(2);
+                % Adjust ID to be 1-based right from the start
+                id = id + 1;
                 
-                obj.areas{i} = Area(id, x, y, activeness);
+                % Create Area object with the adjusted 1-based ID
+                % and store it at the corresponding index
+                obj.areas{id} = Area(id, x, y, activeness);
+                
+                % Store the first activeness metric (demand) in capacity array
+                obj.capacity(id) = activeness(1);
             end
             
             % Initialize edges matrix
@@ -58,22 +63,24 @@ classdef Instance < handle
             
             % Read edge data
             for i = 1:m
-                a = fscanf(fileID, '%d', 1) + 1; % +1 for 1-indexing in MATLAB
-                b = fscanf(fileID, '%d', 1) + 1; % +1 for 1-indexing in MATLAB
+                a = fscanf(fileID, '%d', 1);
+                b = fscanf(fileID, '%d', 1);
                 
-                obj.areas{a}.addNeighbor(b-1); % -1 to keep original IDs
-                obj.areas{b}.addNeighbor(a-1); % -1 to keep original IDs
+                % Adjust indices to be 1-based right from the start
+                a = a + 1;
+                b = b + 1;
                 
+                % Add neighbors using 1-based IDs
+                obj.areas{a}.addNeighbor(b);
+                obj.areas{b}.addNeighbor(a);
+                
+                % For the adjacency matrix, we use 1-based indices
                 obj.edges(a, b) = 1;
                 obj.edges(b, a) = 1;
             end
             
             % Read k (number of districts)
             obj.k = fscanf(fileID, '%d', 1);
-            
-            % Calculate averages
-            obj.average1 = sum1 / obj.k;
-            obj.average2 = sum2 / obj.k;
             
             % Close the file
             fclose(fileID);
@@ -87,8 +94,6 @@ classdef Instance < handle
             cloned = Instance();
             cloned.n = obj.n;
             cloned.k = obj.k;
-            cloned.average1 = obj.average1;
-            cloned.average2 = obj.average2;
             
             % Copy areas
             cloned.areas = cell(1, obj.n);
@@ -113,22 +118,7 @@ classdef Instance < handle
         % Create instance with specific scenario demands
         function inst = createScenarioInstance(obj, scenarioDemands)
             inst = obj.clone();
-            sum1 = 0;
-            sum2 = 0;
-            
-            for i = 1:obj.n
-                area = obj.areas{i};
-                origActiveness = area.getActiveness();
-                newActiveness = origActiveness;
-                newActiveness(1) = scenarioDemands(i);
-                
-                inst.areas{i}.setActiveness(newActiveness);
-                sum1 = sum1 + newActiveness(1);
-                sum2 = sum2 + newActiveness(2);
-            end
-            
-            inst.average1 = sum1 / inst.k;
-            inst.average2 = sum2 / inst.k;
+            inst.capacity = scenarioDemands;
         end
         
         % Generate distance matrix
@@ -157,6 +147,10 @@ classdef Instance < handle
         
         function value = getEdges(obj)
             value = obj.edges;
+        end
+        
+        function value = getCapacity(obj)
+            value = obj.capacity;
         end
         
         % Output instance information

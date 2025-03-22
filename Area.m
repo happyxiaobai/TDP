@@ -1,18 +1,18 @@
 classdef Area < handle
     properties
-        id              % Area ID
+        id              % Area ID (1-based)
         x               % x-coordinate
         y               % y-coordinate
         activeness      % Activity metrics array
         isCenter = false % Flag to indicate if this is a center
-        neighbors = []  % List of neighboring area IDs
+        neighbors = []  % List of neighboring area IDs (using 1-based IDs)
     end
     
     methods
         % Constructor
         function obj = Area(id, x, y, activeness)
             if nargin > 0
-                obj.id = id;
+                obj.id = id;  % Store the original ID (0-based)
                 obj.x = x;
                 obj.y = y;
                 obj.activeness = activeness;
@@ -20,14 +20,14 @@ classdef Area < handle
             end
         end
         
-        % Add a neighbor to this area
+        % Add a neighbor to this area (using original 0-based ID)
         function addNeighbor(obj, neighborId)
             obj.neighbors = [obj.neighbors, neighborId];
         end
         
         % Getter for ID
         function value = getId(obj)
-            value = obj.id;
+            value = obj.id;  % Return the original ID (0-based)
         end
         
         % Getter for x-coordinate
@@ -65,7 +65,7 @@ classdef Area < handle
             obj.activeness = activeness;
         end
         
-        % Getter for isCenter - renamed to getIsCenter to avoid conflict
+        % Getter for isCenter
         function value = getIsCenter(obj)
             value = obj.isCenter;
         end

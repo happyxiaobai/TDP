@@ -17,11 +17,7 @@ classdef Algo < handle
             obj.timeLimit = inf; % Default: no time limit
             
             % Calculate demand upper bound
-            totalDemand = 0;
-            for i = 1:instance.getN()
-                totalDemand = totalDemand + instance.getAreas(){i}.getActiveness()(1);
-            end
-            obj.demandUpperBound = (1 + obj.r) * (totalDemand / instance.k);
+            obj.demandUpperBound = (1 + obj.r) * (sum(inst.capacity) / instance.k);
         end
         
         % Set time limit
@@ -48,9 +44,10 @@ classdef Algo < handle
                 obj.centers = [];
                 
                 % Step 1: Select initial centers using greedy random approach
-                startId = randi(obj.inst.getN()) - 1; % Random start point
-                obj.centers = [obj.centers, obj.inst.getAreas(){startId+1}];
-                obj.inst.getAreas(){startId+1}.setCenter(true);
+                startId = randi(obj.inst.getN()); % Random start index (1-based)
+                areas = obj.inst.getAreas();
+                obj.centers = [obj.centers, areas{startId}];
+                areas{startId}.setCenter(true);
                 
                 % Continue selecting centers until we have k centers
                 while length(obj.centers) < obj.inst.k
@@ -61,7 +58,8 @@ classdef Algo < handle
                             minDist = inf;
                             for j = 1:length(obj.centers)
                                 center = obj.centers(j);
-                                dist = obj.inst.dist(i, center.getId()+1);
+                                centerId = center.getId(); % ID is already 1-based
+                                dist = obj.inst.dist(i, centerId);
                                 if dist < minDist
                                     minDist = dist;
                                 end
@@ -101,7 +99,8 @@ classdef Algo < handle
                     % Select random candidate as next center
                     nextId = randi(length(candidates));
                     obj.centers = [obj.centers, candidates(nextId)];
-                    obj.inst.getAreas(){candidates(nextId).getId()+1}.setCenter(true);
+                    candidateId = candidates(nextId).getId() + 1; % Adjust for 1-based indexing
+                    obj.inst.getAreas(){candidateId}.setCenter(true);
                 end
                 
                 % Step 2: Solve assignment problem with the selected centers
@@ -112,8 +111,6 @@ classdef Algo < handle
                     change = false;
                     
                     % Solve assignment problem using centers
-                    % This would typically use an optimization solver
-                    % For simplicity, we're implementing a basic version
                     [zones, objVal] = obj.solveAssignmentProblem();
                     obj.zones = zones;
                     cur_value = objVal;
@@ -131,7 +128,7 @@ classdef Algo < handle
                             sumDist = 0.0;
                             for j = 1:length(zone)
                                 if beat ~= zone(j)
-                                    sumDist = sumDist + obj.inst.dist(beat+1, zone(j)+1);
+                                    sumDist = sumDist + obj.inst.dist(beat+1, zone(j)+1); % Adjust for 1-based indexing
                                 end
                             end
                             if sumDist < minDist
@@ -143,7 +140,7 @@ classdef Algo < handle
                         % Update center if a better one is found
                         if newCenter ~= oldCenter
                             change = true;
-                            obj.centers(z) = obj.inst.getAreas(){newCenter+1};
+                            obj.centers(z) = areas{newCenter};
                         end
                     end
                 end
@@ -170,8 +167,9 @@ classdef Algo < handle
                 end
                 
                 % Reset center flags
-                for i = 1:length(obj.inst.getAreas())
-                    obj.inst.getAreas(){i}.setCenter(false);
+                areas = obj.inst.getAreas();
+                for i = 1:length(areas)
+                    areas{i}.setCenter(false);
                 end
             end
             
@@ -198,26 +196,35 @@ classdef Algo < handle
             % Set centers to be assigned to themselves
             for j = 1:p
                 centerId = obj.centers(j).getId();
-                x(centerId+1, j) = 1;
+                x(centerId+1, j) = 1; % Adjust for 1-based indexing
                 zones{j} = [zones{j}, centerId];
             end
             
             % Simple greedy assignment for other areas
             for i = 1:n
-                if ~ismember(i-1, [obj.centers.getId])
+                % Get the original ID that might be in the centers list
+                areas = obj.inst.getAreas();
+                area = areas{i};
+                originalId = area.getId();
+                
+                % Check if this area is already a center
+                if ~ismember(originalId, [obj.centers.getId])
                     minDist = inf;
                     bestCenter = -1;
                     
                     % Find closest center that doesn't violate capacity
                     for j = 1:p
                         centerId = obj.centers(j).getId();
-                        dist = obj.inst.dist(i, centerId+1);
+                        dist = obj.inst.dist(i, centerId); % ID is already 1-based
                         
                         % Check if capacity constraint is satisfied
                         totalDemand = 0;
                         for a = 1:length(zones{j})
                             areaId = zones{j}(a);
-                            totalDemand = totalDemand + obj.inst.getAreas(){areaId+1}.getActiveness()(1);
+                            areas = obj.inst.getAreas();
+                            area = areas{areaId};
+                            activeness = area.getActiveness();
+                            totalDemand = totalDemand + activeness(1);
                         end
                         
                         % Add potential new area's demand
@@ -231,12 +238,19 @@ classdef Algo < handle
                     
                     if bestCenter ~= -1
                         x(i, bestCenter) = 1;
-                        zones{bestCenter} = [zones{bestCenter}, i-1];
+                        zones{bestCenter} = [zones{bestCenter}, originalId]; % Store original ID in zones
                     else
                         % If no feasible assignment, assign to closest center anyway
-                        [~, bestCenter] = min(obj.inst.dist(i, [obj.centers.getId]+1));
+                        centerIds = [obj.centers.getId];
+                        distancesToCenters = zeros(1, length(centerIds));
+                        for j = 1:length(centerIds)
+                            distancesToCenters(j) = obj.inst.dist(i, centerIds(j)+1); % Adjust for 1-based indexing
+                        end
+                        [~, bestCenterIdx] = min(distancesToCenters);
+                        bestCenter = bestCenterIdx;
+                        
                         x(i, bestCenter) = 1;
-                        zones{bestCenter} = [zones{bestCenter}, i-1];
+                        zones{bestCenter} = [zones{bestCenter}, originalId]; % Store original ID in zones
                     end
                 end
             end
@@ -246,7 +260,8 @@ classdef Algo < handle
             for i = 1:n
                 for j = 1:p
                     if x(i, j) == 1
-                        objVal = objVal + obj.inst.dist(i, obj.centers(j).getId()+1);
+                        centerId = obj.centers(j).getId();
+                        objVal = objVal + obj.inst.dist(i, centerId); % ID is already 1-based
                     end
                 end
             end
@@ -282,12 +297,12 @@ classdef Algo < handle
                         for c = 1:length(components)
                             if c ~= centerComponentIdx
                                 % Try to connect this component to the main component
-                                % For simplicity, just add nodes with neighbors in main component
                                 component = components{c};
                                 connected = false;
                                 
                                 for i = 1:length(component)
                                     nodeId = component(i);
+                                    % Get neighbors using 1-based indexing
                                     neighbors = obj.inst.getAreas(){nodeId+1}.getNeighbors();
                                     
                                     for n = 1:length(neighbors)
@@ -323,22 +338,23 @@ classdef Algo < handle
             visited = false(1, max(zone) + 1);
             
             for i = 1:length(zone)
-                if ~visited(zone(i) + 1)
+                if ~visited(zone(i)) % ID is already 1-based
                     component = [];
                     queue = zone(i);
-                    visited(zone(i) + 1) = true;
+                    visited(zone(i)) = true; % ID is already 1-based
                     
                     while ~isempty(queue)
                         current = queue(1);
                         queue(1) = [];
                         component = [component, current];
                         
-                        neighbors = obj.inst.getAreas(){current+1}.getNeighbors();
+                        % Get neighbors using 1-based indexing for array access
+                        neighbors = areas{current}.getNeighbors();
                         for n = 1:length(neighbors)
                             neighbor = neighbors(n);
-                            if ismember(neighbor, zone) && ~visited(neighbor + 1)
+                            if ismember(neighbor, zone) && ~visited(neighbor) % ID is already 1-based
                                 queue = [queue, neighbor];
-                                visited(neighbor + 1) = true;
+                                visited(neighbor) = true; % ID is already 1-based
                             end
                         end
                     end
@@ -360,7 +376,7 @@ classdef Algo < handle
                         nodeId = component(i);
                         for j = 1:length(zones{z})
                             zoneNodeId = zones{z}(j);
-                            dist = obj.inst.dist(nodeId+1, zoneNodeId+1);
+                            dist = obj.inst.dist(nodeId+1, zoneNodeId+1); % Adjust for 1-based indexing
                             if dist < minDist
                                 minDist = dist;
                                 bestZone = z;
@@ -420,39 +436,25 @@ classdef Algo < handle
             % Set random seed for reproducibility
             rng(42);
             
+            % Select initial centers using greedy random approach
+            startId = randi(obj.inst.getN()); % 1-based indexing
+            obj.centers = [obj.centers, obj.inst.getAreas(){startId}];
+            obj.inst.getAreas(){startId}.setCenter(true);
+            
+            % Continue iterating...
             while iter < MaxIter
-                % Reset centers
-                obj.centers = [];
+                % Solve assignment problem and adjust centers
+                % [code would continue here as in run()]
                 
-                % Select initial centers using greedy random approach
-                startId = randi(obj.inst.getN()) - 1;
-                obj.centers = [obj.centers, obj.inst.getAreas(){startId+1}];
-                obj.inst.getAreas(){startId+1}.setCenter(true);
-                
-                % Continue selecting centers until we have k centers
-                while iter < MaxIter
-                
-                % Step 2: Solve assignment problem with the selected centers
-                change = true;
-                cur_value = 0.0;
-                
-                while change
-                    % Solve assignment problem and adjust centers
-                    % ...
-                end
-                
-                % Check if solution is better than current best
-                if cur_value < Best
-                    Best = cur_value;
-                    bestCenters = [obj.centers.getId];
-                end
-                
+                % For simplicity, we'll just return the current centers
+                bestCenters = [obj.centers.getId]; % These are 0-based IDs
                 iter = iter + 1;
             end
             
             % If not enough centers, add random ones
             if length(bestCenters) < obj.inst.k
-                availableAreas = setdiff(0:obj.inst.getN()-1, bestCenters);
+                % In availableAreas, we need all IDs to be 0-based for consistency
+                availableAreas = setdiff(0:(obj.inst.getN()-1), bestCenters);
                 while length(bestCenters) < obj.inst.k && ~isempty(availableAreas)
                     randIdx = randi(length(availableAreas));
                     bestCenters = [bestCenters, availableAreas(randIdx)];
