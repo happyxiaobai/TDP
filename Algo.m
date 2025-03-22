@@ -95,31 +95,22 @@ classdef Algo < handle
                     change = false;
                     
                     % Solve assignment problem using centers
-                    [zones, objVal] = obj.solveAssignmentProblem();
-                    obj.zones = zones;
+                    [obj.zones, objVal] = obj.solveAssignmentProblem();
                     cur_value = objVal;
                     
                     % Check and adjust centers
                     for z = 1:length(obj.zones)
                         zone = obj.zones{z};
                         oldCenterId = obj.centers_ids(z);
-                        minDist = inf;
-                        newCenterId = -1;
-                        
+
                         % Find the new center that minimizes total distance
-                        for i = 1:length(zone)
-                            beatId = zone(i);
-                            sumDist = 0.0;
-                            for j = 1:length(zone)
-                                if beatId ~= zone(j)
-                                    sumDist = sumDist + obj.inst.dist(beatId, zone(j)); % IDs are already 1-based
-                                end
-                            end
-                            if sumDist < minDist
-                                minDist = sumDist;
-                                newCenterId = beatId;
-                            end
-                        end
+                        % Find the new center that minimizes total distance - vectorized
+                        distMatrix = obj.inst.dist(zone, zone);  % 提取区域内节点间的距离矩阵
+                        sumDists = sum(distMatrix, 2);  % 计算每个节点到其他所有节点的距离和
+                        
+                        % 找到距离和最小的节点作为新中心
+                        [~, minIdx] = min(sumDists);
+                        newCenterId = zone(minIdx);
                         
                         % Update center if a better one is found
                         if newCenterId ~= oldCenterId
@@ -128,43 +119,48 @@ classdef Algo < handle
                         end
                     end
                 end
-                
-                % Check connectivity and add connectivity constraints if needed
-                [obj.zones, isConnected] = obj.ensureConnectivity();
-                
-                % Update best solution
-                if cur_value < Best
-                    Best = cur_value;
-                    for z = 1:obj.inst.k
-                        BestZones{z} = obj.zones{z};
-                    end
-                end
-                
-                % Update parameters for next iteration
-                iter = iter + 1;
-                fprintf('Iteration %d, best result: %.2f\n', iter, Best);
-                
-                if alpha < beta
-                    alpha = alpha + delta;
-                else
-                    alpha = 0;
-                end
-                
-                % Reset center flags
-                areas = obj.inst.getAreas();
-                for i = 1:length(areas)
-                    areas{i}.setCenter(false);
-                end
             end
-            
+            BestZones = obj.zones;
+            Best = objVal;
             % Calculate total time
             endTime = toc(startTime);
             
             % Save results to file
             obj.saveResults(filename, BestZones, Best, endTime);
         end
+        % Save results to file
+        function saveResults(obj, filename, bestZones, bestValue, runTime)
+            % Create output file path
+            outputFilePath = ['./output/', strrep(filename, '.dat', '.txt')];
+            
+            % Open file for writing
+            fileID = fopen(outputFilePath, 'w');
+            
+            % Write center and zone information
+            for i = 1:length(bestZones)
+                if ~isempty(bestZones{i})
+                    fprintf(fileID, 'center ID: %d\n', obj.centers_ids(i));
+                    for j = 1:length(bestZones{i})
+                        fprintf(fileID, '%d ', bestZones{i}(j));
+                    end
+                    fprintf(fileID, '\n');
+                end
+            end
+            
+            % Write objective value and runtime
+            fprintf(fileID, 'best objective: %.2f\n', bestValue);
+            fprintf(fileID, 'Runtime: %.2f s\n', runTime);
+            
+            % Close file
+            fclose(fileID);
+            
+            % Also print to console
+            fprintf('Results saved to: %s\n', outputFilePath);
+            fprintf('Best objective value: %.2f\n', bestValue);
+            fprintf('Runtime: %.2f s\n', runTime);
+        end
         
-        % Solve the assignment problem with fixed centers
+        % % Solve the assignment problem with fixed centers
         function [zones, objVal] = solveAssignmentProblem(obj)
             % Initialize zones
             zones = cell(1, length(obj.centers_ids));
@@ -187,11 +183,6 @@ classdef Algo < handle
                 centerId = obj.centers_ids(j);
                 constraints = [constraints, x(centerId, j) == 1];
             end
-            %下面是上面的替换代码，可以试试
-            % rows = obj.centers_ids;
-            % cols = 1:p;
-            % constraints = [constraints, x(sub2ind([n, p], rows, cols)) == 1];
-
             
             % Capacity constraints for each center
             % Get demands vector from instance capacity
@@ -209,14 +200,27 @@ classdef Algo < handle
             % Fully vectorized objective calculation
             objective = sum(sum(obj.inst.dist(:, obj.centers_ids) .* x));
             
-            % Set options for Gurobi
+            % Set options for solver
             options = sdpsettings('solver', 'gurobi', 'verbose', 0);
             
-            % Solve the problem
-            diagnostics = optimize(constraints, objective, options);
+            % Initialize connectivity check variables
+            allConnected = false;
+            maxIterations = 100; % Limit iterations to prevent infinite loop
+            iteration = 0;
             
-            % Extract solution if feasible
-            if diagnostics.problem == 0
+            % Iteratively solve and add connectivity constraints
+            while ~allConnected && iteration < maxIterations
+                iteration = iteration + 1;
+                
+                % Solve the problem with current constraints
+                diagnostics = optimize(constraints, objective, options);
+                
+                % Check if solution is feasible
+                if diagnostics.problem ~= 0
+                    warning('Optimization failed in iteration %d: %s', iteration, yalmiperror(diagnostics.problem));
+                    break;
+                end
+                
                 % Extract assignment values
                 x_val = value(x);
                 
@@ -225,94 +229,158 @@ classdef Algo < handle
                     zones{j} = find(x_val(:, j) > 0.5)';
                 end
                 
-                % Calculate objective value
-                objVal = value(objective);
-            else
-                % Fallback to greedy approach if optimization fails
-                objVal = inf;
-                warning('Optimization failed. Using fallback greedy approach.');
+                % Check connectivity of all zones
+                disconnectedComponents = {};
+                allConnected = true;
                 
-                % [Insert original greedy code here if needed]
-            end
-        end
-        
-        % Ensure connectivity of all zones (modified to use center IDs)
-        function [zones, allConnected] = ensureConnectivity(obj)
-            zones = obj.zones;
-            allConnected = true;
-            
-            for j = 1:length(zones)
-                zone = zones{j};
-                centerId = obj.centers_ids(j);
-                
-                % Find connected components in this zone
-                components = obj.findConnectedComponents(zone);
-                
-                if length(components) > 1
-                    allConnected = false;
+                for j = 1:p
+                    zone = zones{j};
+                    centerId = obj.centers_ids(j);
                     
-                    % Find which component contains the center
-                    centerComponentIdx = -1;
-                    for c = 1:length(components)
-                        if ismember(centerId, components{c})
-                            centerComponentIdx = c;
-                            break;
-                        end
-                    end
+                    % Find connected components in this zone
+                    components = obj.findConnectedComponents(zone);
                     
-                    % Integrate disconnected components
-                    if centerComponentIdx ~= -1
-                        newZone = components{centerComponentIdx};
+                    if length(components) > 1
+                        allConnected = false;
+                        
+                        % Find which component contains the center
+                        centerComponentIdx = -1;
                         for c = 1:length(components)
-                            if c ~= centerComponentIdx
-                                % Try to connect this component to the main component
-                                component = components{c};
-                                connected = false;
-                                
-                                for i = 1:length(component)
-                                    nodeId = component(i);
-                                    % Get neighbors using 1-based indexing
-                                    neighbors = obj.inst.getAreas(){nodeId}.getNeighbors();
-                                    
-                                    for n = 1:length(neighbors)
-                                        if ismember(neighbors(n), newZone)
-                                            connected = true;
-                                            break;
-                                        end
-                                    end
-                                    
-                                    if connected
-                                        break;
-                                    end
-                                end
-                                
-                                if connected
-                                    newZone = [newZone, component];
-                                else
-                                    % If can't connect, assign to closest feasible center
-                                    obj.reassignDisconnectedComponent(component, j, zones);
-                                end
+                            if ismember(centerId, components{c})
+                                centerComponentIdx = c;
+                                break;
                             end
                         end
                         
-                        zones{j} = newZone;
+                        % Store all disconnected components for this zone
+                        if centerComponentIdx ~= -1
+                            for c = 1:length(components)
+                                if c ~= centerComponentIdx
+                                    disconnectedComponents{end+1} = struct('component', components{c}, 'zoneIndex', j);
+                                end
+                            end
+                        end
                     end
                 end
+                
+                % If all zones are connected, exit the loop
+                if allConnected
+                    fprintf('All zones are connected after %d iterations\n', iteration);
+                    break;
+                end
+                
+                % Add connectivity constraints for disconnected components
+                constraintsAdded = 0;
+                for i = 1:length(disconnectedComponents)
+                    component = disconnectedComponents{i}.component;
+                    zoneIdx = disconnectedComponents{i}.zoneIndex;
+                    
+                    % Find neighbors of this component (areas adjacent to component but not in it)
+                    A = obj.inst.getAreas();
+                    neighbors = [];
+                    for nodeIdx = 1:length(component)
+                        nodeId = component(nodeIdx);
+                        nodeNeighbors = A{nodeId}.getNeighbors();
+                        
+                        for n = 1:length(nodeNeighbors)
+                            neighborId = nodeNeighbors(n);
+                            if ~ismember(neighborId, component)
+                                neighbors = [neighbors, neighborId];
+                            end
+                        end
+                    end
+                    
+                    % Remove duplicates
+                    neighbors = unique(neighbors);
+                    
+                    % Create connectivity constraint: at least one neighbor must be in the same zone,
+                    % or not all component nodes are in this zone
+                    constr_expr = 0;
+                    
+                    % Sum assignments of neighbor nodes to this zone
+                    for neighborId = neighbors
+                        constr_expr = constr_expr + x(neighborId, zoneIdx);
+                    end
+                    
+                    % Subtract assignments of component nodes to this zone
+                    for nodeId = component
+                        constr_expr = constr_expr - x(nodeId, zoneIdx);
+                    end
+                    
+                    % Add constraint: component nodes all assigned to zone j => at least one neighbor also assigned
+                    constraints = [constraints, constr_expr >= 1 - length(component)];
+                    constraintsAdded = constraintsAdded + 1;
+                end
+                
+                fprintf('Iteration %d: Added %d connectivity constraints\n', iteration, constraintsAdded);
+            end
+            
+            % Final solution evaluation
+            if allConnected
+                % Calculate objective value
+                objVal = value(objective);
+            else
+                % If we couldn't achieve connectivity, return the current solution
+                warning('Could not achieve connectivity after %d iterations. Using best solution found.', maxIterations);
+                objVal = value(objective);
             end
         end
-        
+      
         % Other methods will be similarly updated
         
         % Modified getCenters method to maintain compatibility with other code
         function areas = getCenters(obj)
             % Convert center IDs back to Area objects if needed by other code
             areas = [];
+            A = obj.inst.getAreas();
             for i = 1:length(obj.centers_ids)
-                centerId = obj.centers_ids(i);
-                areas = [areas, obj.inst.getAreas(){centerId}];
+                centerId = obj.centers_ids(i); 
+                areas = [areas, A{centerId}];
             end
         end
-        
+        % Find connected components in a zone
+        % Find connected components in a zone
+        function components = findConnectedComponents(obj, zone)
+            components = {};
+            
+            if isempty(zone)
+                return;
+            end
+            
+            % Since IDs are 1-based, we can use the total number of areas
+            visited = false(1, obj.inst.getN());
+            
+            for i = 1:length(zone)
+                nodeId = zone(i);
+                if ~visited(nodeId)
+                    % Start a new component
+                    component = [];
+                    queue = nodeId;
+                    visited(nodeId) = true;
+                    
+                    % BFS to find all connected nodes
+                    while ~isempty(queue)
+                        current = queue(1);
+                        queue(1) = [];
+                        component = [component, current];
+                        
+                        % Get neighbors of current node
+                        areas = obj.inst.getAreas();
+                        nodeNeighbors = areas{current}.getNeighbors();
+                        
+                        for n = 1:length(nodeNeighbors)
+                            neighbor = nodeNeighbors(n);
+                            if ismember(neighbor, zone) && ~visited(neighbor)
+                                queue = [queue, neighbor];
+                                visited(neighbor) = true;
+                            end
+                        end
+                    end
+                    
+                    components{end+1} = component;
+                end
+            end
+        end
         % Get centers IDs directly 
         function ids = getCenterIds(obj)
             ids = obj.centers_ids;
