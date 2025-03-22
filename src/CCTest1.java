@@ -13,7 +13,7 @@ public class CCTest1 {
         double[] rValues = {0.1, 0.2, 0.3}; // Tolerance parameter values
         double[] gammaValues = {0.7, 0.8, 0.9}; // Chance constraint risk parameter
         int[] scenarioNumValues = {500, 1000, 5000}; // Number of scenarios
-        boolean[] useScenarioGeneration = {true, false}; // Whether to use scenario generation
+        boolean[] useScenarioGeneration = {true}; // Whether to use scenario generation
         long seed = 12345678; // Random seed
 
         long testSeed = seed + 1000;
@@ -72,17 +72,17 @@ public class CCTest1 {
                                     );
 
                                     // Run algorithm
-                                    String outputFileName = String.format(
-                                            "CC_%s_RSD%.3f_r%.1f_gamma%.1f_scen%d_scenario%s",
-                                            instanceName.replace(".dat", ""),
-                                            RSD, r, gamma, numScenarios, useScenario ? "true" : "false"
-                                    );
+//                                    String outputFileName = String.format(
+//                                            "CC_%s_RSD%.3f_r%.1f_gamma%.1f_scen%d_scenario%s",
+//                                            instanceName.replace(".dat", ""),
+//                                            RSD, r, gamma, numScenarios, useScenario ? "true" : "false"
+//                                    );
 
                                     // Run algorithm and get objective value
                                     double objectiveValue = 0;
                                     try {
                                         // Pass the useScenario parameter to control scenario generation
-                                        objectiveValue = algo.run(outputFileName, useScenario);
+                                        objectiveValue = algo.run("", useScenario);
                                     } catch (Exception e) {
                                         System.err.println("Error running experiment: " + e.getMessage());
                                         continue;

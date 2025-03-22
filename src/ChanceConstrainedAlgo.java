@@ -1,7 +1,5 @@
 import gurobi.*;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 
@@ -120,18 +118,18 @@ public class ChanceConstrainedAlgo {
         long endTime = System.currentTimeMillis();
         double timeSpentInSeconds = (endTime - startTime) / 1000.0;
 
-        // 输出结果
-        String outputFilePath = "./output/" + filename.replace(".dat", "_cc.txt");
-        FileWriter writer = new FileWriter(outputFilePath);
-        BufferedWriter buffer = new BufferedWriter(writer);
-
-        for (int io = 0; io < BestZones.length; io++) {
-            buffer.write("center ID: " + centers.get(io).getId() + "\n");
-            for (int jo = 0; jo < BestZones[io].size(); jo++) {
-                buffer.write(BestZones[io].get(jo) + " ");
-            }
-            buffer.newLine();
-        }
+//        // 输出结果
+//        String outputFilePath = "./output/" + filename.replace(".dat", "_cc.txt");
+//        FileWriter writer = new FileWriter(outputFilePath);
+//        BufferedWriter buffer = new BufferedWriter(writer);
+//
+//        for (int io = 0; io < BestZones.length; io++) {
+//            buffer.write("center ID: " + centers.get(io).getId() + "\n");
+//            for (int jo = 0; jo < BestZones[io].size(); jo++) {
+//                buffer.write(BestZones[io].get(jo) + " ");
+//            }
+//            buffer.newLine();
+//        }
 //
 //        String result = String.format("%.2f", Best);
 //        buffer.write("best objective: " + result + "\n");
