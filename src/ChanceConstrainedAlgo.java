@@ -22,10 +22,10 @@ public class ChanceConstrainedAlgo {
     private double[] scenarioDemandUpperBounds; // 每个场景的上限
 
     // 修改构造函数，接收一个种子参数
-    public ChanceConstrainedAlgo(Instance instance, double[][] scenarios, double gamma, long seed) {
+    public ChanceConstrainedAlgo(Instance instance, double[][] scenarios, double gamma, long seed,double r) {
         this.inst = instance;
         this.zones = new ArrayList[inst.k];
-        this.r = 0.1;
+        this.r = r;
         this.gamma = gamma;
         this.rand = new Random(seed); // 使用固定种子初始化随机数生成器
         this.selectedScenarios = new HashSet<>(); // 初始化选定场景集合
@@ -52,7 +52,7 @@ public class ChanceConstrainedAlgo {
         }
     }
 
-    public void run(String filename, boolean useScenarioGeneration) throws GRBException, IOException {
+    public double run(String filename, boolean useScenarioGeneration) throws GRBException, IOException {
         long startTime = System.currentTimeMillis();
         double Best = Double.MAX_VALUE;
         ArrayList<Integer>[] BestZones = new ArrayList[inst.k];
@@ -104,7 +104,7 @@ public class ChanceConstrainedAlgo {
 
         if (!feasible) {
             System.out.println("无法找到可行解，请检查模型参数或增加场景数量");
-            return;
+            return -1;
         }
 
         // 评估最终结果
@@ -132,13 +132,14 @@ public class ChanceConstrainedAlgo {
             }
             buffer.newLine();
         }
-
-        String result = String.format("%.2f", Best);
-        buffer.write("best objective: " + result + "\n");
-        buffer.write("程序运行时间为：" + timeSpentInSeconds + "s" + "\n");
-        buffer.write("机会约束风险参数：" + gamma + "\n");
-        buffer.close();
-        System.out.println("程序运行时间为：" + timeSpentInSeconds + "s" + "\n");
+//
+//        String result = String.format("%.2f", Best);
+//        buffer.write("best objective: " + result + "\n");
+//        buffer.write("程序运行时间为：" + timeSpentInSeconds + "s" + "\n");
+//        buffer.write("机会约束风险参数：" + gamma + "\n");
+//        buffer.close();
+//        System.out.println("程序运行时间为：" + timeSpentInSeconds + "s" + "\n");
+        return Best;
     }
 
     // 保持原函数的向后兼容性
@@ -165,7 +166,7 @@ public class ChanceConstrainedAlgo {
 
             if (scenarioCenters.size() == inst.k) {
                 scenariosProcessed++;
-                System.out.println("处理场景 " + scenariosProcessed + "/" + InitialNum + "，场景索引: " + scenarioIndex);
+//                System.out.println("处理场景 " + scenariosProcessed + "/" + InitialNum + "，场景索引: " + scenarioIndex);
 
                 // 更新中心频率
                 for (int center : scenarioCenters) {
@@ -443,7 +444,7 @@ public class ChanceConstrainedAlgo {
             if (!compareCenters(centers, newCenters)) {
                 centers = newCenters;
                 centersChanged = true;
-                System.out.println("区域中心发生变化，重新求解...");
+//                System.out.println("区域中心发生变化，重新求解...");
             }
 
             // 只有当中心不再变化时才保留最终解

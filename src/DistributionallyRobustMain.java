@@ -10,16 +10,25 @@ public class DistributionallyRobustMain {
         double gamma = 0.05;  // 风险参数（违反概率）
         int numScenarios = 10;  // 场景数量
         long seed = 12345678;  // 随机种子
+
+        // 需求期望值和相对标准差
+        double E = 50.0; // 期望值
+        double[] RSDValues = {0.125, 0.25, 0.5}; // 相对标准差数组
+
+        // 选择特定的RSD值
+        double RSD = RSDValues[0]; // 可以通过索引选择不同的RSD值
+
+        // 分布鲁棒优化其他参数
         boolean useD1 = true;  // 是否使用D_1模糊集（false则使用D_2模糊集）
-        double delta1 = 0.05;  // D_2模糊集参数
-        double delta2 = 0.5;   // D_2模糊集参数（需保证delta2 > max{delta1, 1}）
+        double delta1 = 2;  // D_2模糊集参数
+        double delta2 = 4;   // D_2模糊集参数（需保证delta2 > max{delta1, 1}）
         boolean useJointChance = false;  // 是否使用联合机会约束（Bonferroni近似）
 
         // 加载实例
         Instance instance = new Instance(instanceFile);
 
-        // 生成随机场景
-        double[][] scenarios = generateScenarios(instance.getN(), numScenarios, seed);
+        // 生成随机场景 - 使用均匀分布
+        double[][] scenarios = generateScenarios(instance.getN(), numScenarios, E, RSD, seed);
 
         // 创建并运行分布鲁棒算法
         DistributionallyRobustAlgo algo = new DistributionallyRobustAlgo(
@@ -36,21 +45,23 @@ public class DistributionallyRobustMain {
         visualizer.saveVisualization(outputImagePath);
 
         System.out.println("可视化图像已保存至: " + outputImagePath);
-
-        // 可选：添加与确定性模型和场景近似模型的比较分析
-//        runComparativeAnalysis(instance, scenarios, gamma, seed, outputFileName);
     }
 
-    // 生成随机场景
-    private static double[][] generateScenarios(int n, int numScenarios, long seed) {
+    // 生成随机场景 - 使用均匀分布
+    private static double[][] generateScenarios(int n, int numScenarios, double E, double RSD, long seed) {
         double[][] scenarios = new double[numScenarios][n];
-        Random rand = new Random(seed);
+        Random rand = new Random(seed); // 固定种子以保证可重复性
 
-        // 基于正态分布生成需求场景
+        // 计算均匀分布的左右端点
+        double lowerBound = E * (1 - Math.sqrt(3) * RSD);
+        double upperBound = E * (1 + Math.sqrt(3) * RSD);
+
+        // 生成场景
         for (int s = 0; s < numScenarios; s++) {
             for (int i = 0; i < n; i++) {
-                // 假设需求遵循均值为100，方差为25的正态分布
-                double demand = rand.nextGaussian() * 25 + 100;
+                // 均匀分布生成需求
+                double demand = lowerBound + rand.nextDouble() * (upperBound - lowerBound);
+
                 // 确保需求为正值
                 scenarios[s][i] = Math.max(1, demand);
             }
@@ -69,7 +80,7 @@ public class DistributionallyRobustMain {
         deterministicAlgo.run(baseFileName + "_det");
 
         // 2. 运行场景近似模型
-        ChanceConstrainedAlgo ccaAlgo = new ChanceConstrainedAlgo(instance, scenarios, gamma, seed);
+        ChanceConstrainedAlgo ccaAlgo = new ChanceConstrainedAlgo(instance, scenarios, gamma, seed,0.1);
         ccaAlgo.run(baseFileName + "_cc");
 
         // 3. 运行D_2模糊集分布鲁棒模型
@@ -79,18 +90,5 @@ public class DistributionallyRobustMain {
 
         // 输出各模型的目标函数值和求解时间等信息
         System.out.println("比较分析完成。详细结果请参见输出文件。");
-
-        // 可以添加对样本外性能的评估代码
     }
-
-    // 可以添加一个方法评估样本外性能
-//    private static void evaluateOutOfSamplePerformance(Instance instance,
-//                                                       ArrayList<Integer>[] zones,
-//                                                       ArrayList<Area> centers,
-//                                                       double gamma,
-//                                                       int numTestScenarios) {
-//        // 生成新的测试场景
-//        // 评估各个模型解决方案在新场景下违反容量约束的概率
-//        // 输出样本外性能评估结果
-//    }
 }
