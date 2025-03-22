@@ -268,8 +268,10 @@ public class ChanceConstrainedAlgo {
 
             // 创建环境和模型
             GRBEnv env = new GRBEnv();
+            env.set(GRB.IntParam.OutputFlag,0);
             env.set(GRB.IntParam.LogToConsole, 0);
             env.set(GRB.IntParam.Seed, 42);
+            env.start();
             GRBModel model = new GRBModel(env);
 
             // 决策变量 x_ij
@@ -476,10 +478,11 @@ public class ChanceConstrainedAlgo {
         selectedScenarios.add(rand.nextInt(numScenarios)); // 开始时选择一个随机场景
 
         GRBEnv env = new GRBEnv();
-
+        env.set(GRB.IntParam.OutputFlag,0);
         env.set(GRB.IntParam.LogToConsole, 0);
         // 设置Gurobi的随机种子参数，确保求解过程确定性
         env.set(GRB.IntParam.Seed, 42); // 固定种子
+        env.start();
 
         boolean feasible = false;
         int iterationLimit = 100; // 最大迭代次数
@@ -687,8 +690,10 @@ public class ChanceConstrainedAlgo {
 
         // 创建一个模型，并在整个过程中保持它不被销毁
         GRBEnv env = new GRBEnv();
+        env.set(GRB.IntParam.OutputFlag,0);
         env.set(GRB.IntParam.LogToConsole, 0);
         env.set(GRB.IntParam.Seed, 42);
+        env.start();
 
         GRBModel model = new GRBModel(env);
 

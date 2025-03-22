@@ -496,10 +496,12 @@ public class Algo {
                 change = false;
 
                 GRBEnv env = new GRBEnv();
-                env.start();
+                env.set(GRB.IntParam.OutputFlag,0);
+
                 env.set(GRB.IntParam.LogToConsole, 0);
                 env.set(GRB.IntParam.OutputFlag, 0); // 关闭标准输出
                 env.set(GRB.StringParam.LogFile, "fileName.log"); // 设置日志文件名
+                env.start();
 
                 GRBModel model = new GRBModel(env);
                 model.set(GRB.IntParam.OutputFlag, 0); // 关闭标准输出

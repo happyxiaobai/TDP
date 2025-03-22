@@ -7,8 +7,6 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="gurobi" level="project" />
-    <orderEntry type="library" name="Jama-1.0.3" level="project" />
-    <orderEntry type="library" name="mosek" level="project" />
+    <orderEntry type="library" name="TDP" level="project" />
   </component>
 </module>

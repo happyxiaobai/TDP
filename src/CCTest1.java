@@ -2,6 +2,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Random;
 
 public class CCTest1 {
@@ -14,17 +15,22 @@ public class CCTest1 {
         int[] scenarioNumValues = {500, 1000, 5000}; // 场景数量
         long seed = 12345678; // 随机种子
 
+        long testSeed = seed + 1000;
+        int numTestScenarios = 1000;
+
+
+
         // 输出结果的CSV文件
         String outputCSVPath = "./output/chance_constrained_results.csv";
 
         // 准备CSV文件
         try (BufferedWriter csvWriter = new BufferedWriter(new FileWriter(outputCSVPath))) {
-            // 写入CSV标题行
-            csvWriter.write("Instance,RSD,r,gamma,Scenarios,Runtime(s),Objective");
+            // Write CSV header
+            csvWriter.write("Instance,RSD,r,gamma,Scenarios,Runtime(s),Objective,OutOfSamplePerformance");
             csvWriter.newLine();
 
             // 获取instances目录下的所有.dat文件
-            File dir = new File("./instances");
+            File dir = new File("./Instances");
             File[] instanceFiles = dir.listFiles((d, name) -> name.endsWith(".dat"));
 
             // 如果没有找到实例文件，给出提示
@@ -74,7 +80,7 @@ public class CCTest1 {
                                 // 运行算法并获取目标函数值
                                 double objectiveValue = 0;
                                 try {
-                                    objectiveValue = algo.run(outputFileName, false);
+                                    objectiveValue = algo.run(outputFileName, true);
                                 } catch (Exception e) {
                                     System.err.println("Error running experiment: " + e.getMessage());
                                     continue;
@@ -84,25 +90,31 @@ public class CCTest1 {
                                 long endTime = System.currentTimeMillis();
                                 double runtime = (endTime - startTime) / 1000.0;
 
-                                // 写入CSV结果
+
+                                // Test out-of-sample performance
+                                double outOfSamplePerformance = testOutOfSamplePerformance(
+                                        instance, algo, E, RSD, testSeed, r, numScenarios);
+
+                                // Write to CSV file
                                 csvWriter.write(String.format(
-                                        "%s,%.3f,%.1f,%.1f,%d,%.3f,%.4f",
+                                        "%s,%.3f,%.1f,%.1f,%d,%.3f,%.4f,%.4f",
                                         instanceName, RSD, r, gamma, numScenarios,
-                                        runtime, objectiveValue
+                                        runtime, objectiveValue, outOfSamplePerformance
                                 ));
                                 csvWriter.newLine();
 
+
                                 // 刷新以确保实时写入
                                 csvWriter.flush();
-
-                                // 可视化
-                                String outputImagePath = String.format(
-                                        "./output/%s_visualization.png", outputFileName
-                                );
-                                DistrictVisualizer visualizer = new DistrictVisualizer(
-                                        instance, algo.getZones(), algo.getCenters()
-                                );
-                                visualizer.saveVisualization(outputImagePath);
+//
+//                                // 可视化
+//                                String outputImagePath = String.format(
+//                                        "./output/%s_visualization.png", outputFileName
+//                                );
+//                                DistrictVisualizer visualizer = new DistrictVisualizer(
+//                                        instance, algo.getZones(), algo.getCenters()
+//                                );
+//                                visualizer.saveVisualization(outputImagePath);
                             }
                         }
                     }
@@ -137,4 +149,80 @@ public class CCTest1 {
 
         return scenarios;
     }
+
+
+    /**
+     * Tests the out-of-sample performance of a solution by checking constraint satisfaction
+     * across newly generated scenarios not used during optimization.
+     *
+     * @param instance The problem instance
+     * @param algo The algorithm with a computed solution
+     * @param E Expected demand value
+     * @param RSD Relative standard deviation for demand generation
+     * @param testSeed Random seed for test scenario generation
+     * @param r Capacity tolerance parameter
+     * @param numTestScenarios Number of test scenarios to generate
+     * @return The percentage of test scenarios where constraints are satisfied
+     */
+    private static double testOutOfSamplePerformance(
+            Instance instance,
+            ChanceConstrainedAlgo algo,
+            double E,
+            double RSD,
+            long testSeed,
+            double r,
+            int numTestScenarios) {
+
+        // Generate test scenarios with a different seed than training
+        double[][] testScenarios = generateScenarios(
+                instance.getN(), numTestScenarios, E, RSD, testSeed);
+
+        // Get the solution
+        ArrayList<Integer>[] zones = algo.getZones();
+        ArrayList<Area> centers = algo.getCenters();
+
+        // Count satisfied scenarios
+        int satisfiedScenarios = 0;
+
+        // For each test scenario
+        for (int s = 0; s < numTestScenarios; s++) {
+            // Calculate this scenario's total demand
+            double scenarioTotalDemand = 0;
+            for (int i = 0; i < instance.getN(); i++) {
+                scenarioTotalDemand += testScenarios[s][i];
+            }
+
+            // Calculate scenario-specific capacity limit
+            double scenarioCapacityLimit = (1 + r) * (scenarioTotalDemand / instance.k);
+
+            boolean scenarioSatisfied = true;
+
+            // Check each district
+            for (int j = 0; j < zones.length; j++) {
+                if (zones[j] == null || zones[j].isEmpty()) {
+                    continue;
+                }
+
+                // Calculate total demand for this district in this scenario
+                double districtDemand = 0;
+                for (int areaId : zones[j]) {
+                    districtDemand += testScenarios[s][areaId];
+                }
+
+                // Check if capacity constraint is violated
+                if (districtDemand > scenarioCapacityLimit) {
+                    scenarioSatisfied = false;
+                    break;
+                }
+            }
+
+            if (scenarioSatisfied) {
+                satisfiedScenarios++;
+            }
+        }
+
+        // Return percentage of satisfied scenarios
+        return (double) satisfiedScenarios / numTestScenarios;
+    }
+
 }
