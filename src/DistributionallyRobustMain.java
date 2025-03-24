@@ -31,20 +31,20 @@ public class DistributionallyRobustMain {
         double[][] scenarios = generateScenarios(instance.getN(), numScenarios, E, RSD, seed);
 
         // 创建并运行分布鲁棒算法
-        DistributionallyRobustAlgo algo = new DistributionallyRobustAlgo(
-                instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance);
-
-        // 运行算法并生成结果
-        algo.run(outputFileName);
-
-        System.out.println("基于分布鲁棒机会约束的配送区域划分问题求解完成。");
-
-        // 可视化结果
-        String outputImagePath = "./output/" + outputFileName + "_visualization.png";
-        DistrictVisualizer visualizer = new DistrictVisualizer(instance, algo.getZones(), algo.getCenters());
-        visualizer.saveVisualization(outputImagePath);
-
-        System.out.println("可视化图像已保存至: " + outputImagePath);
+//        DistributionallyRobustAlgo algo = new DistributionallyRobustAlgo(
+//                instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance);
+//
+//        // 运行算法并生成结果
+//        algo.run(outputFileName);
+//
+//        System.out.println("基于分布鲁棒机会约束的配送区域划分问题求解完成。");
+//
+//        // 可视化结果
+//        String outputImagePath = "./output/" + outputFileName + "_visualization.png";
+//        DistrictVisualizer visualizer = new DistrictVisualizer(instance, algo.getZones(), algo.getCenters());
+//        visualizer.saveVisualization(outputImagePath);
+//
+//        System.out.println("可视化图像已保存至: " + outputImagePath);
     }
 
     // 生成随机场景 - 使用均匀分布
@@ -71,24 +71,24 @@ public class DistributionallyRobustMain {
     }
 
     // 比较不同模型的性能
-    private static void runComparativeAnalysis(Instance instance, double[][] scenarios,
-                                               double gamma, long seed, String baseFileName) throws Exception {
-        System.out.println("\n开始进行比较分析...");
-
-        // 1. 运行确定性模型
-        Algo deterministicAlgo = new Algo(instance);
-        deterministicAlgo.run(baseFileName + "_det");
-
-        // 2. 运行场景近似模型
-        ChanceConstrainedAlgo ccaAlgo = new ChanceConstrainedAlgo(instance, scenarios, gamma, seed,0.1);
-        ccaAlgo.run(baseFileName + "_cc");
-
-        // 3. 运行D_2模糊集分布鲁棒模型
-        DistributionallyRobustAlgo drAlgo = new DistributionallyRobustAlgo(
-                instance, scenarios, gamma, seed, false, 0.05, 0.5, false);
-        drAlgo.run(baseFileName + "_dr_d2");
-
-        // 输出各模型的目标函数值和求解时间等信息
-        System.out.println("比较分析完成。详细结果请参见输出文件。");
-    }
+//    private static void runComparativeAnalysis(Instance instance, double[][] scenarios,
+//                                               double gamma, long seed, String baseFileName) throws Exception {
+//        System.out.println("\n开始进行比较分析...");
+//
+//        // 1. 运行确定性模型
+//        Algo deterministicAlgo = new Algo(instance);
+//        deterministicAlgo.run(baseFileName + "_det");
+//
+//        // 2. 运行场景近似模型
+//        ChanceConstrainedAlgo ccaAlgo = new ChanceConstrainedAlgo(instance, scenarios, gamma, seed,0.1);
+//        ccaAlgo.run(baseFileName + "_cc");
+//
+//        // 3. 运行D_2模糊集分布鲁棒模型
+//        DistributionallyRobustAlgo drAlgo = new DistributionallyRobustAlgo(
+//                instance, scenarios, gamma, seed, false, 0.05, 0.5, false);
+//        drAlgo.run(baseFileName + "_dr_d2");
+//
+//        // 输出各模型的目标函数值和求解时间等信息
+//        System.out.println("比较分析完成。详细结果请参见输出文件。");
+//    }
 }

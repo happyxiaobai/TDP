@@ -28,7 +28,7 @@ public class CCTest1 {
 // Prepare CSV file
         try (BufferedWriter csvWriter = new BufferedWriter(new FileWriter(outputCSVPath))) {
             // Write CSV header with modified columns - replacing Instance with NumUnits and NumRegions
-            csvWriter.write("NumUnits,NumRegions,RSD,r,gamma,Scenarios,UseScenarioGeneration,Runtime(s),Objective,OutOfSamplePerformance");
+            csvWriter.write("InstanceName,NumUnits,NumRegions,RSD,r,gamma,Scenarios,UseScenarioGeneration,Runtime(s),Objective,OutOfSamplePerformance");
             csvWriter.newLine();
 
             // Get all .dat files in instances directory
@@ -40,7 +40,7 @@ public class CCTest1 {
                 System.out.println("No .dat files found in ./instances directory.");
                 return;
             }
-
+            int cnt = 0;
             // Iterate through all instance files
             for (File instanceFile : instanceFiles) {
                 String instanceName = instanceFile.getName();
@@ -52,7 +52,8 @@ public class CCTest1 {
                             for (int numScenarios : scenarioNumValues) {
                                 for (boolean useScenario : useScenarioGeneration) {
                                     // Print current experiment information
-                                    System.out.println("Running experiment:");
+                                    System.out.println("current inst number:" + cnt + "    >>>>>>>>>>>Running experiment:");
+                                    cnt++;
                                     System.out.println("Instance: " + instanceName);
                                     System.out.println("RSD: " + RSD);
                                     System.out.println("r: " + r);
@@ -101,8 +102,8 @@ public class CCTest1 {
 
                                     // Write to CSV file with the modified fields (numUnits and numRegions instead of instanceName)
                                     csvWriter.write(String.format(
-                                            "%d,%d,%.3f,%.1f,%.1f,%d,%s,%.3f,%.4f,%.4f",
-                                            numUnits, numRegions, RSD, r, gamma, numScenarios,
+                                            "%s,%d,%d,%.3f,%.1f,%.1f,%d,%s,%.3f,%.4f,%.4f",
+                                            instanceName, numUnits, numRegions, RSD, r, gamma, numScenarios,
                                             useScenario ? "true" : "false",
                                             runtime, objectiveValue, outOfSamplePerformance
                                     ));

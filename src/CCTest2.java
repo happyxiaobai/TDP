@@ -7,12 +7,12 @@ import java.util.Random;
 public class CCTest2 {
     public static void main(String[] args) throws Exception {
         // Fixed parameters for the test
-        String instanceFile = "./Instances/2DU100-05-13.dat";  // Specify the instance file
+        String instanceFile = "./Instances/2DU120-05-11.dat";  // Specify the instance file
         double E = 50.0;                                    // Expected value
-        double RSD = 0.125;                                  // Relative standard deviation
-        double r = 0.1;                                     // Tolerance parameter
-        double gamma = 0.1;                                 // Chance constraint risk parameter
-        int numScenarios = 5000;                            // Number of scenarios
+        double RSD = 0.5;                                  // Relative standard deviation
+        double r = 0.2;                                     // Tolerance parameter
+        double gamma = 0.2;                                 // Chance constraint risk parameter
+        int numScenarios = 500;                            // Number of scenarios
         boolean useScenarioGeneration = true;               // Whether to use scenario generation
         long seed = 12345678;                               // Random seed
 
