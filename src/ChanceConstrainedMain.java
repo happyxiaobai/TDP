@@ -27,10 +27,7 @@ public class ChanceConstrainedMain {
         algo.run(outputFileName,false);
         System.out.println("基于机会约束的配送区域划分问题求解完成。");
         String outputImagePath = "./output/" + outputFileName + "_visualization.png";
-        DistrictVisualizer visualizer = new DistrictVisualizer(instance, algo.getZones(), algo.getCenters());
-        visualizer.saveVisualization(outputImagePath);
 
-        System.out.println("可视化图像已保存至: " + outputImagePath);
     }
 
     // 生成随机场景 - 使用均匀分布

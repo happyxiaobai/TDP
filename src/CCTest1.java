@@ -13,7 +13,7 @@ public class CCTest1 {
         double[] rValues = {0.1, 0.2, 0.3}; // Tolerance parameter values
         double[] gammaValues = {0.3, 0.2, 0.1}; // Chance constraint risk parameter
         int[] scenarioNumValues = {500, 1000, 5000}; // Number of scenarios
-        boolean[] useScenarioGeneration = {true}; // Whether to use scenario generation
+        boolean[] useScenarioGeneration = {false}; // Whether to use scenario generation
         long seed = 12345678; // Random seed
 
         long testSeed = seed + 1000;
