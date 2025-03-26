@@ -250,7 +250,7 @@ public class ChanceConstrainedAlgo {
     private boolean generateInitialSolutionWithExactMethod() throws GRBException {
         // Record the start time
         long startTime = System.currentTimeMillis();
-        final long TIME_LIMIT_MS = 1200 * 1000; // 1200 seconds in milliseconds
+        final long TIME_LIMIT_MS = 7200 * 1000; // 1200 seconds in milliseconds
 
         boolean feasible = false;
         boolean centersChanged = true;
@@ -449,12 +449,9 @@ public class ChanceConstrainedAlgo {
                 remainingTimeMs = TIME_LIMIT_MS - (System.currentTimeMillis() - startTime);
                 remainingTimeSec = Math.max(1.0, remainingTimeMs / 1000.0);
                 model.set(GRB.DoubleParam.TimeLimit, remainingTimeSec);
-
-                System.out.println("Added " + constraintCounter + " connectivity constraints, continuing iteration...");
             }
 
             if (connectivityViolation) {
-                System.out.println("Warning: Couldn't ensure connectivity within max iterations");
                 model.dispose();
                 env.dispose();
                 return false;
@@ -470,7 +467,6 @@ public class ChanceConstrainedAlgo {
             if (!compareCenters(centers, newCenters)) {
                 centers = newCenters;
                 centersChanged = true;
-                System.out.println("District centers changed, resolving...");
             }
 
             // Only keep final solution when centers no longer change
