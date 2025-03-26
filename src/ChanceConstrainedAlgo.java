@@ -526,7 +526,7 @@ public class ChanceConstrainedAlgo {
         int cnt = 0;
         while (!feasible) {
             // Check if the global time limit has been exceeded
-            System.out.println("iteration: " + cnt++);
+//            System.out.println("iteration: " + cnt++);
             long currentTime = System.currentTimeMillis();
             if (currentTime - startTime > TIME_LIMIT_MS) {
                 System.out.println("Global time limit of 600 seconds exceeded in scenario generation method");
@@ -542,7 +542,7 @@ public class ChanceConstrainedAlgo {
             long remainingTimeMs = TIME_LIMIT_MS - (System.currentTimeMillis() - startTime);
             double remainingTimeSec = Math.max(1.0, remainingTimeMs / 1000.0); // Ensure at least 1 second
             subModel.set(GRB.DoubleParam.TimeLimit, remainingTimeSec);
-            System.out.println("remainingTimeSec: " + remainingTimeSec);
+//            System.out.println("remainingTimeSec: " + remainingTimeSec);
             subModel.optimize();
 
             // Check if optimization timed out
@@ -997,7 +997,7 @@ public class ChanceConstrainedAlgo {
                 return false;
             }
 
-            System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
+//            System.out.println("连通性处理迭代 " + iteration + " 完成，添加了 " + constraintCounter + " 个连通性约束");
         }
 
         model.optimize();
