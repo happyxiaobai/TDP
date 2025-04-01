@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="7e335b3e-fefe-4ab6-b44f-14a6b62cc205" name="更改" comment="">
+      <change afterPath="$PROJECT_DIR$/src/DistrictPolygonVisualizer.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/DistrictVisualizer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-1.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-2.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-3.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-4.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-5.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-6.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-7.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-8.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Instances/2DU60-05-9.dat" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/src/DistributionallyRobustAlgo.java" root0="FORCE_HIGHLIGHTING" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="ProjectErrors" />
+  </component>
+  <component name="ProjectId" id="2uf2EQknLxne6cOrSwHtXIBabsB" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/xiaobai/Desktop/TDP&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;库&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager" selected="应用程序.CCTest1">
+    <configuration name="CCTest1" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="CCTest1" />
+      <module name="TDP" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="CCTest2" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="CCTest2" />
+      <module name="TDP" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Demo" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="Demo" />
+      <module name="TDP" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="DistributionallyRobustMain" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="DistributionallyRobustMain" />
+      <module name="TDP" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="MosekExample" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="MosekExample" />
+      <module name="TDP" />
+      <option name="VM_PARAMETERS" value="-Djava.library.path=D:\mosek\10.2\tools\platform\win64x86\bin" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <list>
+      <item itemvalue="应用程序.Demo" />
+      <item itemvalue="应用程序.DistributionallyRobustMain" />
+      <item itemvalue="应用程序.CCTest2" />
+      <item itemvalue="应用程序.CCTest1" />
+      <item itemvalue="应用程序.MosekExample" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="应用程序.CCTest1" />
+        <item itemvalue="应用程序.CCTest2" />
+        <item itemvalue="应用程序.Demo" />
+        <item itemvalue="应用程序.DistributionallyRobustMain" />
+        <item itemvalue="应用程序.MosekExample" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="应用程序级" UseSingleDictionary="true" transferred="true" />
+  <component name="SshConsoleOptionsProvider">
+    <option name="myEncoding" value="UTF-8" />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="7e335b3e-fefe-4ab6-b44f-14a6b62cc205" name="更改" comment="" />
+      <created>1742625198788</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1742625198788</updated>
+      <workItem from="1742625199897" duration="8339000" />
+      <workItem from="1742636890215" duration="5325000" />
+      <workItem from="1742642576081" duration="3882000" />
+      <workItem from="1742646562094" duration="38610000" />
+      <workItem from="1742821442615" duration="17497000" />
+      <workItem from="1743003484536" duration="5202000" />
+      <workItem from="1743254228230" duration="129000" />
+      <workItem from="1743505440745" duration="535000" />
+    </task>
+    <task id="LOCAL-00001" summary="change">
+      <option name="closed" value="true" />
+      <created>1742632683551</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1742632683551</updated>
+    </task>
+    <task id="LOCAL-00002" summary="change">
+      <option name="closed" value="true" />
+      <created>1742635496808</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1742635496808</updated>
+    </task>
+    <task id="LOCAL-00003" summary="change">
+      <option name="closed" value="true" />
+      <created>1742637008567</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1742637008567</updated>
+    </task>
+    <task id="LOCAL-00004" summary="change">
+      <option name="closed" value="true" />
+      <created>1742644619076</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1742644619077</updated>
+    </task>
+    <task id="LOCAL-00005" summary="change">
+      <option name="closed" value="true" />
+      <created>1742646515634</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1742646515634</updated>
+    </task>
+    <task id="LOCAL-00006" summary="change">
+      <option name="closed" value="true" />
+      <created>1742646612264</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1742646612264</updated>
+    </task>
+    <task id="LOCAL-00007" summary="change">
+      <option name="closed" value="true" />
+      <created>1742655870306</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1742655870306</updated>
+    </task>
+    <task id="LOCAL-00008" summary="change">
+      <option name="closed" value="true" />
+      <created>1742659729353</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1742659729353</updated>
+    </task>
+    <task id="LOCAL-00009" summary="change">
+      <option name="closed" value="true" />
+      <created>1742662449783</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1742662449783</updated>
+    </task>
+    <task id="LOCAL-00010" summary="change">
+      <option name="closed" value="true" />
+      <created>1742665537766</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1742665537766</updated>
+    </task>
+    <task id="LOCAL-00011" summary="change">
+      <option name="closed" value="true" />
+      <created>1742794492576</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1742794492576</updated>
+    </task>
+    <task id="LOCAL-00012" summary="change">
+      <option name="closed" value="true" />
+      <created>1742959140702</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1742959140702</updated>
+    </task>
+    <task id="LOCAL-00013" summary="change">
+      <option name="closed" value="true" />
+      <created>1742960799140</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1742960799140</updated>
+    </task>
+    <task id="LOCAL-00014" summary="change">
+      <option name="closed" value="true" />
+      <created>1743003903999</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1743003903999</updated>
+    </task>
+    <task id="LOCAL-00015" summary="change">
+      <option name="closed" value="true" />
+      <created>1743004777795</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1743004777795</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
+    <MESSAGE value="change" />
+    <option name="LAST_COMMIT_MESSAGE" value="change" />
+    <option name="OPTIMIZE_IMPORTS_BEFORE_PROJECT_COMMIT" value="true" />
+    <option name="REFORMAT_BEFORE_PROJECT_COMMIT" value="true" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/CCTest2.java</url>
+          <line>56</line>
+          <option name="timeStamp" value="6" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+    <watches-manager>
+      <configuration name="Application">
+        <watch expression="centers.get(1)" />
+      </configuration>
+    </watches-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/TDP$CCTest2.ic" NAME="CCTest2 覆盖结果" MODIFIED="1742637916812" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="idea" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" />
+  </component>
+</project>
