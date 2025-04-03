@@ -10,12 +10,12 @@ function DistributionallyRobustMain()
     try
         % Set parameters
         instanceFile = './Instances/2DU60-05-1.dat';  % Input file path
-        outputFileName = '2DU60-05-1_drcc';           % Output file name
+        outputFileName = 'test_drcc';           % Output file name
         outputDir = './output/';
         
         % Set distributionally robust optimization parameters
-        gamma = 0.05;      % Risk parameter
-        numScenarios = 10; % Number of scenarios
+        gamma = 0.2;      % Risk parameter
+        numScenarios = 1000; % Number of scenarios
         seed = 12345678;   % Random seed
         
         % Demand parameters
@@ -24,7 +24,7 @@ function DistributionallyRobustMain()
         
         % Select specific RSD value
         RSD = RSDValues(1);
-        
+        r = 0.2;
         % Other DRCC parameters
         useD1 = true;      % Whether to use D1 fuzzy set
         delta1 = 1;        % D2 fuzzy set parameter
@@ -35,10 +35,10 @@ function DistributionallyRobustMain()
         timeout = 3600; % 1 hour timeout
         
         % Display configuration
-        displayConfig(instanceFile, outputFileName, gamma, numScenarios, E, RSD, useD1, delta1, delta2, useJointChance);
+        % displayConfig(instanceFile, outputFileName, gamma, numScenarios, E, RSD, useD1, delta1, delta2, useJointChance);
         
         % Validate parameters
-        validateParams(gamma, numScenarios, E, RSD, delta1, delta2);
+        % validateParams(gamma, numScenarios, E, RSD, delta1, delta2);
         
         % Ensure output directory exists
         if ~exist(outputDir, 'dir')
@@ -62,15 +62,15 @@ function DistributionallyRobustMain()
             error('Failed to load instance or instance has no areas');
         end
         
-        fprintf('Instance contains %d areas\n', instance.getN());
+        % fprintf('Instance contains %d areas\n', instance.getN());
         
         % Generate random scenarios using vectorized operations
-        fprintf('Generating %d scenarios...\n', numScenarios);
+        % fprintf('Generating %d scenarios...\n', numScenarios);
         scenarios = generateScenarios(instance.getN(), numScenarios, E, RSD, seed);
         
         % Create and run the distributionally robust algorithm
-        fprintf('Initializing algorithm...\n');
-        algo = DistributionallyRobustAlgo(instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance);
+        % fprintf('Initializing algorithm...\n');
+        algo = DistributionallyRobustAlgo(instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance,r);
         
         if isempty(algo)
             error('Failed to create algorithm object');
@@ -80,14 +80,14 @@ function DistributionallyRobustMain()
         try
             if isfield(algo, 'timeLimit') || isprop(algo, 'timeLimit')
                 algo.timeLimit = timeout;
-                fprintf('Algorithm timeout set to %d seconds\n', timeout);
+                % fprintf('Algorithm timeout set to %d seconds\n', timeout);
             end
         catch
             fprintf('Warning: Could not set algorithm timeout\n');
         end
         
         % Run algorithm with timeout monitoring
-        fprintf('\nRunning algorithm...\n');
+        % fprintf('\nRunning algorithm...\n');
         algoRunStartTime = tic;
         
         % Try to create a timer for timeout monitoring
@@ -122,22 +122,19 @@ function DistributionallyRobustMain()
         % Get results from the algorithm
         zones = algo.getZones();
         centers = algo.getCenters();
-        
+        % Perform out-of-sample performance evaluation
+        fprintf('\nPerforming out-of-sample performance evaluation...\n');
+        evaluateOutOfSamplePerformance(instance, zones, centers, E, RSD,r);
+
+% Store performance results in output if needed
+% You could write these results to a file if desired
         % Visualize results
-        outputImagePath = fullfile(outputDir, [outputFileName, '_visualization.png']);
-        fprintf('Creating visualization...\n');
-        visualizer = DistrictVisualizer(instance, zones, centers);
-        visualizer.saveVisualization(outputImagePath);
-        
-        fprintf('Visualization saved to: %s\n', outputImagePath);
         
         % Display solution statistics
-        displayStats(instance, zones, centers);
-        
         % Total runtime
-        totalRunTime = toc(totalStartTime);
-        fprintf('\nTotal run time: %.2f seconds (%.2f minutes)\n', ...
-            totalRunTime, totalRunTime/60);
+        % totalRunTime = toc(totalStartTime);
+        % fprintf('\nTotal run time: %.2f seconds (%.2f minutes)\n', ...
+        %     totalRunTime, totalRunTime/60);
         
     catch e
         % Stop the timer if it's active
@@ -295,43 +292,85 @@ function timeoutCheck(startTime, timeout)
     end
 end
 
-% Function to display summary statistics
-function displayStats(instance, zones, centers)
-    fprintf('\n----------------------------------------\n');
-    fprintf('Solution Summary Statistics:\n');
-    fprintf('----------------------------------------\n');
-    fprintf('Number of areas: %d\n', instance.getN());
-    fprintf('Number of districts: %d\n', length(zones));
+
+% Function to evaluate out-of-sample performance
+function performanceResults = evaluateOutOfSamplePerformance(instance, zones, ~, E, RSD, r)
+    % If r is not provided, use default value 0.1
+    if nargin < 6
+        r = 0.1;
+    end
+
+    % fprintf('\n----------------------------------------\n');
+    % fprintf('Evaluating Out-of-Sample Performance:\n');
+    % fprintf('----------------------------------------\n');
+    % 
+    % Parameters for out-of-sample testing
+    numTestScenarios = 1000;
+    testSeed = 54321; % Different seed for test data
     
-    % Calculate district sizes
-    districtSizes = zeros(1, length(zones));
+    % Generate test scenarios
+    % fprintf('Generating %d test scenarios...\n', numTestScenarios);
+    testScenarios = generateScenarios(instance.getN(), numTestScenarios, E, RSD, testSeed);
+    
+    % Initialize counters for each district and overall performance
+    districtViolationCounts = zeros(1, length(zones));
+    scenariosSatisfied = 0;
+    
+    % Evaluate each test scenario
+    % fprintf('Evaluating scenarios...\n');
+    
+    % Pre-compute zone assignment matrix (each column represents a zone)
+    n = instance.getN();
+    assignmentMatrix = zeros(n, length(zones));
     for i = 1:length(zones)
-        districtSizes(i) = length(zones{i});
-    end
-    
-    fprintf('\nDistrict sizes (number of areas):\n');
-    fprintf('  Min: %d\n', min(districtSizes));
-    fprintf('  Max: %d\n', max(districtSizes));
-    fprintf('  Mean: %.2f\n', mean(districtSizes));
-    fprintf('  Standard deviation: %.2f\n', std(districtSizes));
-    
-    % Calculate total demand per district if capacity information is available
-    if ~isempty(instance.getCapacity())
-        capacity = instance.getCapacity();
-        districtDemands = zeros(1, length(zones));
-        
-        for i = 1:length(zones)
-            % Extract zone areas and sum their demands
-            zoneAreas = zones{i};
-            districtDemands(i) = sum(capacity(zoneAreas));
+        if ~isempty(zones{i})
+            assignmentMatrix(zones{i}, i) = 1;
         end
-        
-        fprintf('\nDistrict demands:\n');
-        fprintf('  Min: %.2f\n', min(districtDemands));
-        fprintf('  Max: %.2f\n', max(districtDemands));
-        fprintf('  Mean: %.2f\n', mean(districtDemands));
-        fprintf('  Standard deviation: %.2f\n', std(districtDemands));
     end
     
-    fprintf('----------------------------------------\n');
+    % For each scenario
+    for s = 1:numTestScenarios
+        % Calculate total demand for this specific scenario
+        scenarioTotalDemand = sum(testScenarios(s, :));
+        
+        % Calculate demand upper bound for this specific scenario
+        scenarioDemandUpperBound = (1 + r) * (scenarioTotalDemand / instance.k);
+        
+        % Calculate all zone demands in one matrix operation
+        scenarioDemandVector = testScenarios(s, :);
+        zoneDemands = scenarioDemandVector * assignmentMatrix;
+        
+        % Check violations for all zones at once
+        violationMask = zoneDemands > scenarioDemandUpperBound;
+        districtViolationCounts = districtViolationCounts + violationMask;
+        
+        % Scenario is satisfied if no violations
+        scenarioSatisfied = ~any(violationMask);
+        if scenarioSatisfied
+            scenariosSatisfied = scenariosSatisfied + 1;
+        end
+    end
+    
+    % Calculate satisfaction rates
+    districtSatisfactionRates = 1 - (districtViolationCounts / numTestScenarios);
+    overallSatisfactionRate = scenariosSatisfied / numTestScenarios;
+    
+    % Output results
+    % fprintf('\nOut-of-Sample Performance Results:\n');
+    fprintf('  Overall satisfaction rate: %.4f\n', overallSatisfactionRate);
+    performanceResults = overallSatisfactionRate;
+    % fprintf('\nIndividual district satisfaction rates:\n');
+    
+    % for i = 1:length(zones)
+    %     fprintf('  District %d: %.4f\n', i, districtSatisfactionRates(i));
+    % end
+    
+    % fprintf('\nMin district satisfaction rate: %.4f\n', min(districtSatisfactionRates));
+    % fprintf('----------------------------------------\n');
+    % 
+    % Return results as a structure
+    % performanceResults = struct(...
+    %     'overallSatisfactionRate', overallSatisfactionRate, ...
+    %     'districtSatisfactionRates', districtSatisfactionRates, ...
+    %     'numTestScenarios', numTestScenarios);
 end

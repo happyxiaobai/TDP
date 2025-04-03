@@ -5,7 +5,7 @@ classdef DistributionallyRobustAlgo < handle
         inst                    % Instance object
         centers                 % List of center areas
         zones                   % Array of zone assignments
-        r = 0.1                 % Tolerance parameter
+        r = 0.2                % Tolerance parameter
         gamma                   % Risk parameter
         scenarios               % Scenario data
         numScenarios            % Number of scenarios
@@ -19,12 +19,12 @@ classdef DistributionallyRobustAlgo < handle
         individualGammas        % Individual risk allocations for Bonferroni approx
         demandUpperBound        % Upper bound on demand
         timeLimit = 1200        % Time limit in seconds
-        maxIterations = 100     % Maximum iterations
+        maxIterations = 1000     % Maximum iterations
     end
     
     methods
         % Constructor
-        function obj = DistributionallyRobustAlgo(instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance)
+        function obj = DistributionallyRobustAlgo(instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance,r)
             obj.inst = instance;
             obj.scenarios = scenarios;
             obj.numScenarios = size(scenarios, 1);
@@ -33,7 +33,7 @@ classdef DistributionallyRobustAlgo < handle
             obj.scenarioDemands = round(scenarios);
             
             obj.gamma = gamma;
-            obj.r = 0.1;
+            obj.r = r;
             rng(seed); % Set random seed
             obj.zones = cell(1, instance.k);
             obj.useD1 = useD1;
@@ -47,7 +47,6 @@ classdef DistributionallyRobustAlgo < handle
             % Calculate demand upper bound
             totalMeanDemand = sum(obj.meanVector);
             obj.demandUpperBound = (1 + obj.r) * (totalMeanDemand / instance.k);
-            
             % Initialize individual gammas for Bonferroni approximation
             if useJointChance
                 obj.individualGammas = repmat(gamma / instance.k, 1, instance.k);
@@ -65,9 +64,6 @@ classdef DistributionallyRobustAlgo < handle
             centered = obj.scenarios - obj.meanVector;
             obj.covarianceMatrix = (centered' * centered) / obj.numScenarios;
             
-            % Check if covariance matrix is symmetric
-            isSymmetric = all(all(abs(obj.covarianceMatrix - obj.covarianceMatrix') < 1e-10));
-            fprintf('Covariance matrix is symmetric: %d\n', isSymmetric);
             
             % Check if covariance matrix is positive semidefinite
             [~, p] = chol(obj.covarianceMatrix);
@@ -81,8 +77,6 @@ classdef DistributionallyRobustAlgo < handle
                 [~, p] = chol(obj.covarianceMatrix);
                 isPSD = (p == 0);
                 fprintf('Fixed matrix is positive semidefinite: %d\n', isPSD);
-            else
-                fprintf('Covariance matrix is  positive semidefinite\n');
             end
         end
         
@@ -111,10 +105,8 @@ classdef DistributionallyRobustAlgo < handle
                 obj.centers = [obj.centers, area];
                 area.setCenter(true);
             end
-            fprintf('==============================================================Begin first SOCP=================\n');
             % Step 2: Generate initial feasible solution
             feasible = obj.generateInitialSolution();
-            fprintf('============================================================== first SOCP completed=================\n');
             if ~feasible
                 fprintf('Cannot find feasible solution, check model parameters\n');
                 return;
@@ -139,9 +131,9 @@ classdef DistributionallyRobustAlgo < handle
                     feasible = obj.generateInitialSolution();
                     if feasible
                         cur_value = obj.evaluateObjective();
-                        fprintf('Iteration %d: Objective value = %.2f\n', iteration, cur_value);
+                        % fprintf('Iteration %d: Objective value = %.2f\n', iteration, cur_value);
                     else
-                        fprintf('Iteration %d: No feasible solution found\n', iteration);
+                        % fprintf('Iteration %d: No feasible solution found\n', iteration);
                         break;
                     end
                 end
@@ -171,8 +163,8 @@ classdef DistributionallyRobustAlgo < handle
                 fprintf('delta1: %.2f, delta2: %.2f\n', obj.delta1, obj.delta2);
             end
             
-            fprintf('Constraint type: %s\n', conditional(obj.useJointChance, 'Joint constraint (DRJCC)', 'Individual constraint (DRICC)'));
-            fprintf('Risk parameter: %.2f\n', obj.gamma);
+            % fprintf('Constraint type: %s\n', conditional(obj.useJointChance, 'Joint constraint (DRJCC)', 'Individual constraint (DRICC)'));
+            % fprintf('Risk parameter: %.2f\n', obj.gamma);
         end
         
         % Select initial centers - Optimized to avoid multiple scenario solving
@@ -185,7 +177,7 @@ classdef DistributionallyRobustAlgo < handle
             
             for i = 1:InitialNum
                 scenarioIndex = scenarioIndices(i);
-                fprintf('Processing scenario %d/%d, scenario index: %d\n', i, InitialNum, scenarioIndex);
+                % fprintf('Processing scenario %d/%d, scenario index: %d\n', i, InitialNum, scenarioIndex);
                 
                 % Solve for the specific scenario
                 scenarioCenters = obj.solveForScenario(scenarioIndex);
@@ -335,12 +327,11 @@ classdef DistributionallyRobustAlgo < handle
                 objective = sum(sum(distMatrix .* x));
                 
                 % Set solver options
-                options = sdpsettings('solver', 'gurobi', 'verbose',1, 'cachesolvers', 1, 'usex0', 0);
-                options.mosek.MSK_DPAR_OPTIMIZER_MAX_TIME = obj.timeLimit;
+                options = sdpsettings('solver', 'gurobi', 'verbose', 0, 'cachesolvers', 1, 'usex0', 0, 'gurobi.MIPGap', 0.01);
+                
                 
                 % Solve the problem
                 result = optimize(constraints, objective, options);
-                
                 if result.problem == 0
                     % Extract solution using logical indexing
                     x_val = value(x);
@@ -484,8 +475,8 @@ classdef DistributionallyRobustAlgo < handle
             objective = sum(sum(distMatrix .* x));
             
             % Set solver options
-            options = sdpsettings('solver', 'mosek', 'verbose', 0);
-            options.mosek.MSK_DPAR_OPTIMIZER_MAX_TIME = obj.timeLimit;
+            options = sdpsettings('solver', 'gurobi', 'verbose', 0, 'cachesolvers', 1, 'usex0', 0, 'gurobi.MIPGap', 0.01);
+            
             
             % Initialize connectivity check
             areas = obj.inst.getAreas();
@@ -540,7 +531,7 @@ classdef DistributionallyRobustAlgo < handle
                 end
                 
                 if allConnected
-                    fprintf('All zones are connected after %d iterations\n', iteration);
+                    % fprintf('All zones are connected after %d iterations\n', iteration);
                     break;
                 end
                 
@@ -580,7 +571,7 @@ classdef DistributionallyRobustAlgo < handle
                     end
                 end
                 
-                fprintf('Connectivity iteration %d: Added %d constraints\n', iteration, constraintCounter);
+                % fprintf('Connectivity iteration %d: Added %d constraints\n', iteration, constraintCounter);
                 
                 if constraintCounter == 0
                     fprintf('Warning: No new constraints added, but connectivity issues persist\n');
@@ -602,7 +593,7 @@ classdef DistributionallyRobustAlgo < handle
             end
             
             % Use a more efficient approach with logical indexing
-            visited = false(1, max(zone));
+            visited = false(1, obj.inst.getN());
             areas = obj.inst.getAreas();
             
             for i = 1:length(zone)

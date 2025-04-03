@@ -484,7 +484,7 @@ classdef Algo < handle
             
             while change && iterationCount < maxIterations
                 iterationCount = iterationCount + 1;
-                fprintf('Assignment iteration %d\n', iterationCount);
+                % fprintf('Assignment iteration %d\n', iterationCount);
                 
                 % Solve assignment problem (without connectivity constraints)
                 [zones, objVal] = obj.assignmentOnly();
@@ -505,15 +505,15 @@ classdef Algo < handle
                 % Check if centers have changed
                 change = ~isequal(oldCenters, obj.centers_ids);
                 
-                if change
-                    fprintf('Centers updated, continuing iterations.\n');
-                else
-                    fprintf('Centers stabilized after %d iterations.\n', iterationCount);
-                end
+                % if change
+                %     fprintf('Centers updated, continuing iterations.\n');
+                % else
+                %     fprintf('Centers stabilized after %d iterations.\n', iterationCount);
+                % end
             end
             
             % Step 3: Ensure connectivity
-            fprintf('Ensuring connectivity of all zones...\n');
+            % fprintf('Ensuring connectivity of all zones...\n');
             [connectedZones, connectedObjVal] = obj.ensureConnectivity();
             
             % Update with final solution
@@ -523,7 +523,7 @@ classdef Algo < handle
             endTime = toc(startTime);
             
             % Log results without writing to file
-            fprintf('Run2 complete - Runtime: %.2f seconds, Objective: %.2f\n', endTime, connectedObjVal);
+            % fprintf('Run2 complete - Runtime: %.2f seconds, Objective: %.2f\n', endTime, connectedObjVal);
         end
         
         
@@ -717,7 +717,7 @@ classdef Algo < handle
                 
                 % If all zones are connected, exit the loop
                 if allConnected
-                    fprintf('All zones are connected after %d iterations\n', iteration);
+                    % fprintf('All zones are connected after %d iterations\n', iteration);
                     break;
                 end
                 
@@ -763,7 +763,7 @@ classdef Algo < handle
                     constraintsAdded = constraintsAdded + 1;
                 end
                 
-                fprintf('Connectivity iteration %d: Added %d connectivity constraints\n', iteration, constraintsAdded);
+                % fprintf('Connectivity iteration %d: Added %d connectivity constraints\n', iteration, constraintsAdded);
             end
             
             % Final solution evaluation
