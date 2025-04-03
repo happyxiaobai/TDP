@@ -4,7 +4,7 @@
 clear all;
 
 % Define instance file path
-instanceFile = './Instances/2DU100-05-1.dat';
+instanceFile = './Instances/2DU60-05-1.dat';
 
 % Load the instance
 instance = Instance(instanceFile);

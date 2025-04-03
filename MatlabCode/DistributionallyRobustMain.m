@@ -15,7 +15,7 @@ function DistributionallyRobustMain()
         
         % Set distributionally robust optimization parameters
         gamma = 0.05;      % Risk parameter
-        numScenarios = 50; % Number of scenarios
+        numScenarios = 10; % Number of scenarios
         seed = 12345678;   % Random seed
         
         % Demand parameters

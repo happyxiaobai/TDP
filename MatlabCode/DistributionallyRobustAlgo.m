@@ -335,7 +335,7 @@ classdef DistributionallyRobustAlgo < handle
                 objective = sum(sum(distMatrix .* x));
                 
                 % Set solver options
-                options = sdpsettings('solver', 'mosek', 'verbose',1, 'cachesolvers', 1, 'usex0', 0);
+                options = sdpsettings('solver', 'gurobi', 'verbose',1, 'cachesolvers', 1, 'usex0', 0);
                 options.mosek.MSK_DPAR_OPTIMIZER_MAX_TIME = obj.timeLimit;
                 
                 % Solve the problem
