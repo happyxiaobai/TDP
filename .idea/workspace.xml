@@ -5,7 +5,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7e335b3e-fefe-4ab6-b44f-14a6b62cc205" name="更改" comment="">
+      <change afterPath="$PROJECT_DIR$/Jama-1.0.3.jar" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MatlabCode/DistributionallyRobustAlgo.asv" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MatlabCode/DistributionallyRobustMain.asv" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MatlabCode/GabrielGraphGenerator.m" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MatlabCode/Instances/GabrielGraph100.dat" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MatlabCode/Instances/GabrielGraph100_visualization.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MatlabCode/graphTest.m" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/output/2DU60-05-1_drcc" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/output/2DU60-05-1_drcc_visualization.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/DistributionallyRobustAlgo.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/DistributionallyRobustMain.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/DistributionallyRobustMain.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -55,7 +66,7 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
-  <component name="RunManager" selected="应用程序.CCTest1">
+  <component name="RunManager">
     <configuration name="CCTest1" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="CCTest1" />
       <module name="TDP" />
@@ -133,6 +144,8 @@
       <workItem from="1743572966293" duration="1594000" />
       <workItem from="1743592978798" duration="1841000" />
       <workItem from="1743671099546" duration="1787000" />
+      <workItem from="1743681801224" duration="662000" />
+      <workItem from="1743748143654" duration="2839000" />
     </task>
     <task id="LOCAL-00001" summary="change">
       <option name="closed" value="true" />
@@ -286,7 +299,15 @@
       <option name="project" value="LOCAL" />
       <updated>1743671646634</updated>
     </task>
-    <option name="localTasksCounter" value="20" />
+    <task id="LOCAL-00020" summary="change">
+      <option name="closed" value="true" />
+      <created>1743681859006</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1743681859006</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

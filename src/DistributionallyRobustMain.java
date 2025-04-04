@@ -7,7 +7,7 @@ public class DistributionallyRobustMain {
         String outputFileName = "2DU60-05-1_drcc";
 
         // 设置分布鲁棒优化参数
-        double gamma = 0.05;  // 风险参数（违反概率）
+        double gamma = 0.1;  // 风险参数（违反概率）
         int numScenarios = 100;  // 场景数量
         long seed = 12345678;  // 随机种子
 
@@ -30,21 +30,21 @@ public class DistributionallyRobustMain {
         // 生成随机场景 - 使用均匀分布
         double[][] scenarios = generateScenarios(instance.getN(), numScenarios, E, RSD, seed);
 
-        // 创建并运行分布鲁棒算法
-//        DistributionallyRobustAlgo algo = new DistributionallyRobustAlgo(
-//                instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance);
-//
-//        // 运行算法并生成结果
-//        algo.run(outputFileName);
-//
-//        System.out.println("基于分布鲁棒机会约束的配送区域划分问题求解完成。");
-//
-//        // 可视化结果
-//        String outputImagePath = "./output/" + outputFileName + "_visualization.png";
-//        DistrictVisualizer visualizer = new DistrictVisualizer(instance, algo.getZones(), algo.getCenters());
-//        visualizer.saveVisualization(outputImagePath);
-//
-//        System.out.println("可视化图像已保存至: " + outputImagePath);
+
+        DistributionallyRobustAlgo algo = new DistributionallyRobustAlgo(
+                instance, scenarios, gamma, seed, useD1, delta1, delta2, useJointChance);
+
+        // 运行算法并生成结果
+        algo.run(outputFileName);
+
+        System.out.println("基于分布鲁棒机会约束的配送区域划分问题求解完成。");
+
+        // 可视化结果
+        String outputImagePath = "./output/" + outputFileName + "_visualization.png";
+        DistrictVisualizer visualizer = new DistrictVisualizer(instance, algo.getZones(), algo.getCenters());
+        visualizer.saveVisualization(outputImagePath);
+
+        System.out.println("可视化图像已保存至: " + outputImagePath);
     }
 
     // 生成随机场景 - 使用均匀分布
